@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import AdminDashboard from './components/AdminDashboard'
 import { getPublicItems, reserveItem } from './lib/api'
 import { demoItems } from './lib/demo-items'
+import { getProductImage } from './lib/product-images'
 import { isSupabaseConfigured } from './lib/supabase'
 import type { PublicWishItem } from './lib/types'
 
@@ -11,6 +12,25 @@ const symbols = ['✦', '◷', '◉', '✺', '⌁', '▧', '✧', '▦', '◈', 
 
 function price(cents: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
+}
+
+function ProductArtwork({ item, index }: { item: PublicWishItem; index: number }) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const image = getProductImage(item.title)
+
+  return (
+    <div className={'product-art product-art-' + accents[index % accents.length]}>
+      <span className="art-orbit orbit-a" /><span className="art-orbit orbit-b" />
+      {image && !imageFailed ? (
+        <img className="product-image" src={image} alt={item.title} loading="lazy" decoding="async" onError={() => setImageFailed(true)} />
+      ) : (
+        <span className="product-symbol" aria-hidden="true">{symbols[index % symbols.length]}</span>
+      )}
+      <span className="product-index">{String(index + 1).padStart(2, '0')}</span>
+      {item.is_featured && <span className="main-wish">HAUPTWUNSCH</span>}
+      {item.is_reserved && <span className="reserved-overlay"><span>✓</span> Bereits verschenkt</span>}
+    </div>
+  )
 }
 
 function App() {
@@ -114,13 +134,7 @@ function App() {
           <div className="wish-grid">
             {items.map((item, index) => (
               <article className={'wish-card ' + (item.is_featured ? 'wish-card-featured' : '') + (item.is_reserved ? ' is-reserved' : '')} key={item.id}>
-                <div className={'product-art product-art-' + accents[index % accents.length]}>
-                  <span className="art-orbit orbit-a" /><span className="art-orbit orbit-b" />
-                  <span className="product-symbol">{symbols[index % symbols.length]}</span>
-                  <span className="product-index">{String(index + 1).padStart(2, '0')}</span>
-                  {item.is_featured && <span className="main-wish">HAUPTWUNSCH</span>}
-                  {item.is_reserved && <span className="reserved-overlay"><span>✓</span> Bereits verschenkt</span>}
-                </div>
+                <ProductArtwork item={item} index={index} />
                 <div className="wish-card-content">
                   <p className="card-kicker">{item.is_featured ? 'Der große Wunsch' : 'Wunsch ' + String(index + 1).padStart(2, '0')}</p>
                   <h3>{item.title}</h3>
