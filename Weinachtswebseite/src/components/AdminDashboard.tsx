@@ -109,10 +109,14 @@ function ItemEditor({
 function AdminDashboard() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordFormOpen, setPasswordFormOpen] = useState(false)
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null)
   const [items, setItems] = useState<AdminWishItem[]>([])
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState(false)
+  const [loginNotice, setLoginNotice] = useState('')
   const [message, setMessage] = useState('')
   const [formError, setFormError] = useState('')
   const [editorOpen, setEditorOpen] = useState(false)
@@ -156,12 +160,62 @@ function AdminDashboard() {
     event.preventDefault()
     setPending(true)
     setFormError('')
+    setLoginNotice('')
     try {
       const { error } = await requireSupabase().auth.signInWithPassword({ email, password })
       if (error) throw error
       setPassword('')
     } catch (reason) {
       setFormError(reason instanceof Error ? reason.message : 'Anmeldung fehlgeschlagen.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function sendLoginLink() {
+    const address = email.trim()
+    if (!address) {
+      setFormError('Gib zuerst deine E-Mail-Adresse ein.')
+      return
+    }
+    setPending(true)
+    setFormError('')
+    setLoginNotice('')
+    try {
+      const { error } = await requireSupabase().auth.signInWithOtp({
+        email: address,
+        options: { shouldCreateUser: false },
+      })
+      if (error) throw error
+      setLoginNotice('Der Anmeldelink ist unterwegs. Öffne ihn in diesem Browser, um dich anzumelden.')
+    } catch (reason) {
+      setFormError(reason instanceof Error ? reason.message : 'Der Anmeldelink konnte nicht gesendet werden.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function setAccountPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setFormError('')
+    if (newPassword.length < 8) {
+      setFormError('Dein Passwort muss mindestens 8 Zeichen lang sein.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setFormError('Die Passwörter stimmen nicht überein.')
+      return
+    }
+    setPending(true)
+    try {
+      const { error } = await requireSupabase().auth.updateUser({ password: newPassword })
+      if (error) throw error
+      setNewPassword('')
+      setConfirmPassword('')
+      setPasswordFormOpen(false)
+      setMessage('Passwort gespeichert. Du kannst dich künftig auch mit E-Mail und Passwort anmelden.')
+    } catch (reason) {
+      setFormError(reason instanceof Error ? reason.message : 'Das Passwort konnte nicht gespeichert werden.')
     } finally {
       setPending(false)
     }
@@ -203,10 +257,10 @@ function AdminDashboard() {
   return (
     <main className="site-shell admin-shell">
       <header className="topbar">
-        <a className="brand" href="#" aria-label="Zur öffentlichen Wunschliste">
+        <a className="brand" href={window.location.pathname} aria-label="Zur öffentlichen Wunschliste">
           <span className="brand-mark">J</span><span>JANUS <i>·</i> 26/27</span>
         </a>
-        <a className="back-link" href="#">← Öffentliche Liste</a>
+        <a className="back-link" href={window.location.pathname}>← Öffentliche Liste</a>
       </header>
 
       <section className="admin-intro">
@@ -231,6 +285,8 @@ function AdminDashboard() {
             <label htmlFor="admin-password">Passwort</label>
             <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             <button className="gift-button modal-submit" disabled={pending}>{pending ? 'Meldet an …' : 'Anmelden'} <span aria-hidden="true">↗</span></button>
+            <button className="outline-button magic-link-button" type="button" disabled={pending} onClick={sendLoginLink}>{pending ? 'Wird gesendet …' : 'Anmeldelink per E-Mail senden'}</button>
+            {loginNotice && <p className="login-note" role="status">{loginNotice}</p>}
             {formError && <p className="form-message" role="alert">{formError}</p>}
           </form>
         </section>
@@ -238,10 +294,16 @@ function AdminDashboard() {
         <section className="admin-section">
           <div className="admin-toolbar">
             <div><p className="eyebrow">Angemeldet als {signedInEmail}</p><h2>Alle Wünsche <span>{items.length}</span></h2></div>
-            <div className="admin-toolbar-actions"><button className="outline-button" onClick={() => openEditor(null)}>+ Artikel hinzufügen</button><button className="quiet-button" onClick={signOut}>Abmelden</button></div>
+            <div className="admin-toolbar-actions"><button className="outline-button" onClick={() => openEditor(null)}>+ Artikel hinzufügen</button><button className="quiet-button" onClick={() => { setPasswordFormOpen((open) => !open); setFormError('') }}>Passwort festlegen</button><button className="quiet-button" onClick={signOut}>Abmelden</button></div>
           </div>
           {message && <div className="notice-banner">{message}<button onClick={() => setMessage('')} aria-label="Hinweis schließen">×</button></div>}
           {formError && <div className="error-banner" role="alert">{formError}<button onClick={() => setFormError('')} aria-label="Fehler schließen">×</button></div>}
+          {passwordFormOpen && <form className="password-setup" onSubmit={setAccountPassword}>
+            <h3>Dein Admin-Passwort</h3>
+            <label htmlFor="new-admin-password">Neues Passwort<input id="new-admin-password" type="password" autoComplete="new-password" minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label>
+            <label htmlFor="confirm-admin-password">Passwort wiederholen<input id="confirm-admin-password" type="password" autoComplete="new-password" minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></label>
+            <div className="password-setup-actions"><button className="outline-button" disabled={pending}>{pending ? 'Speichert …' : 'Passwort speichern'}</button><button className="quiet-button" type="button" onClick={() => setPasswordFormOpen(false)}>Abbrechen</button></div>
+          </form>}
           {loading ? <div className="loading-state"><span className="loader" /> Daten werden geladen …</div> : (
             <>
               <p className="drag-hint">Ziehe die Artikel am Griff in deine Wunschreihenfolge. Die Änderung wird direkt gespeichert.</p>
