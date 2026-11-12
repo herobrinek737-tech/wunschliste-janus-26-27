@@ -105,7 +105,10 @@ function App() {
           <span className="brand-mark">J</span>
           <span>JANUS <i>·</i> 26/27</span>
         </a>
-        <div className="topbar-note"><span className="topbar-dot" /> Weihnachtswünsche</div>
+        <div className="topbar-actions">
+          <div className="topbar-note"><span className="topbar-dot" /> Weihnachtswünsche</div>
+          <a className="admin-area-link" href="#/admin">Admin-Bereich</a>
+        </div>
       </header>
 
       <section className="intro">
