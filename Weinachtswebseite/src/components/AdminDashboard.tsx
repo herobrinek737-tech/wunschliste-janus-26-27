@@ -6,6 +6,8 @@ import { deleteItem, getAdminItems, resetItem, saveItem, saveOrder } from '../li
 import { isSupabaseConfigured, requireSupabase } from '../lib/supabase'
 import type { AdminWishItem } from '../lib/types'
 
+const ADMIN_EMAIL = 'janus.kleine@cbg-duelmen.de'
+
 function money(cents: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
 }
@@ -107,7 +109,6 @@ function ItemEditor({
 }
 
 function AdminDashboard() {
-  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -116,11 +117,18 @@ function AdminDashboard() {
   const [items, setItems] = useState<AdminWishItem[]>([])
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState(false)
+  const [loginCooldown, setLoginCooldown] = useState(0)
   const [loginNotice, setLoginNotice] = useState('')
   const [message, setMessage] = useState('')
   const [formError, setFormError] = useState('')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<AdminWishItem | null>(null)
+
+  useEffect(() => {
+    if (loginCooldown === 0) return
+    const timer = window.setTimeout(() => setLoginCooldown((seconds) => Math.max(0, seconds - 1)), 1000)
+    return () => window.clearTimeout(timer)
+  }, [loginCooldown])
 
   async function refresh() {
     setLoading(true)
@@ -162,7 +170,7 @@ function AdminDashboard() {
     setFormError('')
     setLoginNotice('')
     try {
-      const { error } = await requireSupabase().auth.signInWithPassword({ email, password })
+      const { error } = await requireSupabase().auth.signInWithPassword({ email: ADMIN_EMAIL, password })
       if (error) throw error
       setPassword('')
     } catch (reason) {
@@ -173,23 +181,26 @@ function AdminDashboard() {
   }
 
   async function sendLoginLink() {
-    const address = email.trim()
-    if (!address) {
-      setFormError('Gib zuerst deine E-Mail-Adresse ein.')
-      return
-    }
+    if (pending || loginCooldown > 0) return
     setPending(true)
     setFormError('')
     setLoginNotice('')
     try {
       const { error } = await requireSupabase().auth.signInWithOtp({
-        email: address,
+        email: ADMIN_EMAIL,
         options: { shouldCreateUser: false },
       })
       if (error) throw error
-      setLoginNotice('Der Anmeldelink ist unterwegs. Öffne ihn in diesem Browser, um dich anzumelden.')
+      setLoginCooldown(60)
+      setLoginNotice('Der Anmeldelink ist unterwegs. Öffne nur den neuesten Link in diesem Browser; ältere Links sind ungültig.')
     } catch (reason) {
-      setFormError(reason instanceof Error ? reason.message : 'Der Anmeldelink konnte nicht gesendet werden.')
+      const details = typeof reason === 'object' && reason !== null ? reason as { code?: string; status?: number; message?: string } : null
+      if (details?.status === 429 || details?.code?.includes('rate_limit')) {
+        setLoginCooldown(60)
+        setFormError('Das Supabase-E-Mail-Limit ist gerade erreicht. Bitte warte, bevor du erneut anforderst, und verwende den zuletzt erhaltenen Link.')
+      } else {
+        setFormError(reason instanceof Error ? reason.message : 'Der Anmeldelink konnte nicht gesendet werden.')
+      }
     } finally {
       setPending(false)
     }
@@ -213,7 +224,7 @@ function AdminDashboard() {
       setNewPassword('')
       setConfirmPassword('')
       setPasswordFormOpen(false)
-      setMessage('Passwort gespeichert. Du kannst dich künftig auch mit E-Mail und Passwort anmelden.')
+      setMessage('Passwort gespeichert. Ab jetzt meldest du dich nur mit diesem Passwort an.')
     } catch (reason) {
       setFormError(reason instanceof Error ? reason.message : 'Das Passwort konnte nicht gespeichert werden.')
     } finally {
@@ -280,12 +291,10 @@ function AdminDashboard() {
           <p className="eyebrow">Nur für Janus</p>
           <h2>Admin-Anmeldung</h2>
           <form onSubmit={signIn}>
-            <label htmlFor="admin-email">E-Mail</label>
-            <input id="admin-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
-            <label htmlFor="admin-password">Passwort</label>
+            <label htmlFor="admin-password">Admin-Passwort</label>
             <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             <button className="gift-button modal-submit" disabled={pending}>{pending ? 'Meldet an …' : 'Anmelden'} <span aria-hidden="true">↗</span></button>
-            <button className="outline-button magic-link-button" type="button" disabled={pending} onClick={sendLoginLink}>{pending ? 'Wird gesendet …' : 'Anmeldelink per E-Mail senden'}</button>
+            <button className="outline-button magic-link-button" type="button" disabled={pending || loginCooldown > 0} onClick={sendLoginLink}>{pending ? 'Wird gesendet …' : loginCooldown > 0 ? `Link erneut senden in ${loginCooldown} s` : 'Einmalig per Link anmelden / Passwort einrichten'}</button>
             {loginNotice && <p className="login-note" role="status">{loginNotice}</p>}
             {formError && <p className="form-message" role="alert">{formError}</p>}
           </form>
