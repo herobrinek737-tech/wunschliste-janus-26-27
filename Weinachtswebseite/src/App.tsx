@@ -14,6 +14,14 @@ function price(cents: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
 }
 
+function isAdminLocation() {
+  const authParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  return window.location.hash === '#/admin'
+    || authParams.has('access_token')
+    || authParams.has('error_code')
+    || new URLSearchParams(window.location.search).has('code')
+}
+
 function ProductArtwork({ item, index }: { item: PublicWishItem; index: number }) {
   const [imageFailed, setImageFailed] = useState(false)
   const image = getProductImage(item.title)
@@ -34,7 +42,7 @@ function ProductArtwork({ item, index }: { item: PublicWishItem; index: number }
 }
 
 function App() {
-  const [isAdminRoute, setIsAdminRoute] = useState(window.location.hash === '#/admin')
+  const [isAdminRoute, setIsAdminRoute] = useState(isAdminLocation)
   const [items, setItems] = useState<PublicWishItem[]>(isSupabaseConfigured ? [] : demoItems)
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [error, setError] = useState('')
@@ -58,7 +66,7 @@ function App() {
   }
 
   useEffect(() => {
-    const updateRoute = () => setIsAdminRoute(window.location.hash === '#/admin')
+    const updateRoute = () => setIsAdminRoute(isAdminLocation())
     window.addEventListener('hashchange', updateRoute)
     void refreshItems()
     return () => window.removeEventListener('hashchange', updateRoute)

@@ -398,7 +398,21 @@ body::after {
 .giver-info strong { color: #36556c; }
 .text-action { color: #4a7e9d; }
 .text-danger { color: #a46158; }
+.password-setup { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: end; gap: 14px; margin: 20px 0 28px; padding: 20px; border: 1px solid #dce8f1; border-radius: 12px; background: #f8fbfe; }
+.password-setup h3 { grid-column: 1 / -1; margin: 0; color: #355b76; font-family: var(--serif); font-size: 20px; font-weight: 500; }
+.password-setup label { display: grid; gap: 7px; color: #60798d; font-size: 11px; }
+.password-setup input { min-height: 42px; padding: 0 12px; border: 1px solid #d7e4ed; border-radius: 8px; background: #fff; color: #29465d; font: inherit; }
+.password-setup input:focus { outline: 2px solid #7ea7c1; outline-offset: 1px; }
+.password-setup-actions { display: flex; align-items: center; gap: 12px; }
+.magic-link-button { width: 100%; min-height: 42px; justify-content: center; margin-top: 12px; }
+.login-note { margin: 12px 0 0; color: #4c7896; font-size: 12px; line-height: 1.6; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+@media (max-width: 700px) {
+  .password-setup { grid-template-columns: 1fr; }
+  .password-setup h3 { grid-column: auto; }
+  .password-setup-actions { flex-wrap: wrap; }
 }
