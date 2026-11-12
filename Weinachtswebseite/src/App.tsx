@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+import type { CSSProperties } from 'react'
 import AdminDashboard from './components/AdminDashboard'
 import { getPublicItems, reserveItem } from './lib/api'
 import { demoItems } from './lib/demo-items'
@@ -9,6 +10,26 @@ import type { PublicWishItem } from './lib/types'
 
 const accents = ['green', 'blue', 'silver', 'violet', 'amber', 'teal', 'red', 'brick', 'charcoal', 'orange', 'midnight', 'mint', 'slate', 'berry']
 const symbols = ['✦', '◷', '◉', '✺', '⌁', '▧', '✧', '▦', '◈', '✿', '↗', '✶', '⌖', '◌']
+
+const snowflakes = Array.from({ length: 28 }, (_, index) => ({
+  left: ((index * 37 + 9) % 100) + '%',
+  delay: (-((index * 7) % 29)) + 's',
+  duration: (18 + ((index * 11) % 17)) + 's',
+  size: (9 + ((index * 5) % 11)) + 'px',
+  drift: (((index * 29) % 120) - 60) + 'px',
+  opacity: 0.2 + ((index * 17) % 45) / 100,
+}))
+
+const forestTrees = [
+  { left: -3, width: 86, height: 215, shade: 'tree-pale' },
+  { left: 4, width: 116, height: 300, shade: 'tree-blue' },
+  { left: 13, width: 73, height: 182, shade: 'tree-slate' },
+  { left: 20, width: 52, height: 132, shade: 'tree-pale' },
+  { left: 79, width: 55, height: 138, shade: 'tree-pale' },
+  { left: 84, width: 83, height: 204, shade: 'tree-blue' },
+  { left: 91, width: 116, height: 300, shade: 'tree-slate' },
+  { left: 98, width: 87, height: 220, shade: 'tree-pale' },
+]
 
 function price(cents: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
@@ -100,6 +121,41 @@ function App() {
 
   return (
     <main className="site-shell">
+      <div className="winter-scenery" aria-hidden="true">
+        <svg className="fir-sprig fir-sprig-left" viewBox="0 0 220 140" fill="none">
+          <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M-12 4C48 19 102 46 183 112" strokeWidth="2" />
+            <path d="m12 10-9-9m22 13L17 0m22 19L34 3m23 22L51 8m24 26L69 13m24 29L85 22m26 27L99 31m28 27-13-17m33 39-10-18M17 12l-12 7m28 1-15 12m32-6L32 40m42-6L51 51m43-17L68 62m43-12L84 73m43-23-24 34m44-18-27 33m44-12-25 29" />
+            <path d="m74 29 7-20m24 32 10-20m27 39 13-17m-82-4-18-5m41 20-19-5m48 15-18-4m42 21-17-3" />
+          </g>
+        </svg>
+        <svg className="fir-sprig fir-sprig-right" viewBox="0 0 220 140" fill="none">
+          <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M-12 4C48 19 102 46 183 112" strokeWidth="2" />
+            <path d="m12 10-9-9m22 13L17 0m22 19L34 3m23 22L51 8m24 26L69 13m24 29L85 22m26 27L99 31m28 27-13-17m33 39-10-18M17 12l-12 7m28 1-15 12m32-6L32 40m42-6L51 51m43-17L68 62m43-12L84 73m43-23-24 34m44-18-27 33m44-12-25 29" />
+            <path d="m74 29 7-20m24 32 10-20m27 39 13-17m-82-4-18-5m41 20-19-5m48 15-18-4m42 21-17-3" />
+          </g>
+        </svg>
+        <div className="winter-forest winter-forest-left">
+          {forestTrees.slice(0, 4).map((tree, index) => (
+            <span key={index} className={'forest-tree ' + tree.shade} style={{ left: tree.left + '%', width: tree.width, height: tree.height }} />
+          ))}
+        </div>
+        <div className="winter-forest winter-forest-right">
+          {forestTrees.slice(4).map((tree, index) => (
+            <span key={index} className={'forest-tree ' + tree.shade} style={{ left: (tree.left - 79) + '%', width: tree.width, height: tree.height }} />
+          ))}
+        </div>
+      </div>
+      <div className="snowfall" aria-hidden="true">
+        {snowflakes.map((flake, index) => (
+          <span
+            key={index}
+            className="snowflake"
+            style={{ left: flake.left, animationDelay: flake.delay, animationDuration: flake.duration, fontSize: flake.size, opacity: flake.opacity, '--drift': flake.drift } as CSSProperties}
+          >❄</span>
+        ))}
+      </div>
       <header className="topbar">
         <a className="brand" href="#" aria-label="Zur Wunschliste">
           <span className="brand-mark">J</span>
