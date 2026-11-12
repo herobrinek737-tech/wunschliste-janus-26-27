@@ -28,20 +28,11 @@ npx supabase login
 .\setup.ps1 -ProjectRef zwsjiygcegpwtxpxccxt
 ```
 
-## Admin-Zugang einrichten
+## Admin-Zugang
 
-Die Datenbank ist fertig eingerichtet. Für den Admin-Zugang muss ein Auth-Benutzer im Supabase-Dashboard angelegt und als Admin eingetragen werden:
+Das erste Admin-Konto wurde im Supabase-Projekt eingeladen und in `public.wish_admins` freigeschaltet. Öffne den Einladungslink und danach die veröffentlichte Seite unter `/#/admin`. Wenn du den Link auf demselben Gerät und im selben Browser annimmst, wird die Einladungssitzung für die Anmeldung verwendet. Im Dashboard kannst du anschließend über **Passwort festlegen** ein dauerhaftes Passwort für spätere Anmeldungen einrichten.
 
-1. In Supabase unter **Authentication → Users** einen Benutzer mit deiner E-Mail-Adresse anlegen und ein Passwort setzen.
-2. Unter **Authentication → Settings** öffentliche Registrierungen deaktivieren.
-3. Die Benutzer-ID des angelegten Kontos in der SQL-Ansicht als Admin eintragen:
-
-   ```sql
-   insert into public.wish_admins (user_id)
-   values ('UUID-DES-ADMIN-BENUTZERS');
-   ```
-
-Danach kannst du dich unter `/#/admin` anmelden. Nur Benutzer, deren ID in `wish_admins` steht, erhalten Zugriff auf die Admin-Daten. RLS beschränkt zusätzlich den Tabellenzugriff.
+Nur Benutzer, deren ID in `wish_admins` steht, erhalten Zugriff auf die Admin-Daten. RLS beschränkt zusätzlich den Tabellenzugriff. Die Seite bietet keine öffentliche Registrierung.
 
 ## GitHub Pages
 
@@ -68,7 +59,7 @@ src/
   components/AdminDashboard.tsx
   lib/api.ts
   lib/demo-items.ts
-    lib/product-images.ts
+  lib/product-images.ts
   lib/supabase.ts
   lib/types.ts
   App.tsx
