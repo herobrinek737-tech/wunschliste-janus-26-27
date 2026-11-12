@@ -1,0 +1,18 @@
+project_id = "wunschliste-janus-26-27"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[auth]
+enabled = true
+enable_signup = false
+
+[auth.email]
+enable_signup = false
+enable_confirmations = true
