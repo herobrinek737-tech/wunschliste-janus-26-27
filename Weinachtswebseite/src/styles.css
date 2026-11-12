@@ -518,3 +518,12 @@ body::after { opacity: .16; }
 @media (prefers-reduced-motion: reduce) {
   .snowflake { display: none; }
 }
+
+
+/* Keep the winter scenery behind page content across browsers. */
+.winter-scenery { z-index: -1; }
+.winter-scenery .fir-sprig { display: none; }
+.site-shell > :not(.winter-scenery):not(.snowfall) {
+  position: relative;
+  z-index: 1;
+}
