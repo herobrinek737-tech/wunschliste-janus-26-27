@@ -2,11 +2,13 @@
 
 Eine deutsche React-Webseite mit öffentlicher Wunschliste, Reservierung per Formular, Admin-Anmeldung, Drag-and-Drop-Sortierung und Supabase-Backend. Die Oberfläche wird als statische Seite über GitHub Pages veröffentlicht.
 
+Das winterliche Design enthält Schneefall und lokal gespeicherte Produktbilder aus dem beigefügten Wunschlisten-PDF. Dadurch bleiben die Bilder auch auf GitHub Pages verfügbar.
+
 ## Supabase-Projekt
 
-Das Projekt ist in der Organisation **Weinachtsapp** angelegt (Frankfurt, Projekt-Ref `zwsjiygcegpwtxpxccxt`). Die Datenbank enthält alle 14 Wünsche mit Platzhalterpreisen und die Migrationen aus `supabase/migrations/`.
+Das Projekt ist bereits in der Organisation **Weinachtsapp** angelegt (Frankfurt, Projekt-Ref `zwsjiygcegpwtxpxccxt`). Die Datenbank enthält alle 14 Wünsche mit Platzhalterpreisen und den beiden Migrationen aus `supabase/migrations/`.
 
-Die Projekt-URL und der browsergeeignete Publishable Key stehen in `.env.example`. Die lokale Datei `.env.local` ist von Git ausgeschlossen. Niemals einen Secret- oder Service-Role-Key in die Frontend-Konfiguration eintragen.
+Die Supabase-Projekt-URL steht in `.env.example`. Der dort eingetragene Publishable Key ist für die Verwendung im Browser vorgesehen. `.env.local` ist von Git ausgeschlossen.
 
 ## Lokal starten
 
@@ -28,9 +30,9 @@ npx supabase login
 
 ## Admin-Zugang einrichten
 
-Für den Admin-Zugang muss noch ein Auth-Benutzer im Supabase-Dashboard angelegt und als Admin eingetragen werden:
+Die Datenbank ist fertig eingerichtet. Für den Admin-Zugang muss ein Auth-Benutzer im Supabase-Dashboard angelegt und als Admin eingetragen werden:
 
-1. Unter **Authentication → Users** einen Benutzer anlegen und ein Passwort setzen.
+1. In Supabase unter **Authentication → Users** einen Benutzer mit deiner E-Mail-Adresse anlegen und ein Passwort setzen.
 2. Unter **Authentication → Settings** öffentliche Registrierungen deaktivieren.
 3. Die Benutzer-ID des angelegten Kontos in der SQL-Ansicht als Admin eintragen:
 
@@ -39,50 +41,47 @@ Für den Admin-Zugang muss noch ein Auth-Benutzer im Supabase-Dashboard angelegt
    values ('UUID-DES-ADMIN-BENUTZERS');
    ```
 
-Danach kannst du dich unter `/#/admin` anmelden. Nur Benutzer, deren ID in `wish_admins` steht, erhalten Zugriff auf die Admin-Daten. Row Level Security (RLS) beschränkt zusätzlich den Tabellenzugriff.
+Danach kannst du dich unter `/#/admin` anmelden. Nur Benutzer, deren ID in `wish_admins` steht, erhalten Zugriff auf die Admin-Daten. RLS beschränkt zusätzlich den Tabellenzugriff.
 
 ## GitHub Pages
 
-Das GitHub-Repository ist so eingerichtet, dass ein Push nach `main` automatisch die App aus `Weinachtswebseite/` baut und veröffentlicht. Die Pages-Quelle ist **GitHub Actions**; der Workflow liegt im Repo-Hauptordner unter `.github/workflows/deploy.yml`.
+Das bestehende Repository veröffentlicht Änderungen am Branch `main` über GitHub Actions. Die Pages-Quelle ist **GitHub Actions**. Unter **Settings → Secrets and variables → Actions → Variables** müssen diese Repository-Variablen gesetzt sein:
+   - `VITE_SUPABASE_URL` = `https://zwsjiygcegpwtxpxccxt.supabase.co`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY` = Publishable Key aus den Supabase Project Settings
 
-Die benötigten Actions-Variablen `VITE_SUPABASE_URL` und `VITE_SUPABASE_PUBLISHABLE_KEY` sind im Repository hinterlegt. Die veröffentlichte Seite ist unter [herobrinek737-tech.github.io/wunschliste-janus-26-27](https://herobrinek737-tech.github.io/wunschliste-janus-26-27/) erreichbar, sobald der Workflow erfolgreich abgeschlossen ist.
+Änderungen in `main` lösen den Build und die Veröffentlichung automatisch aus. Die Bilddateien liegen unter `public/products/` und werden gemeinsam mit der App ausgeliefert.
 
-GitHub Pages hostet nur die statische Oberfläche. Datenbank und API laufen in Supabase. Der Publishable Key darf im Browser verwendet werden; ein Secret- oder Service-Role-Key gehört niemals in die Frontend-Variablen oder ins Repository.
+GitHub Pages hostet nur die statische Oberfläche. Datenbank und API laufen in Supabase. Der Publishable Key darf im Browser verwendet werden; ein Secret- oder Service-Role-Key gehört niemals in die Frontend-Variablen oder in GitHub Actions Variables.
 
 ## Funktionen
 
-- Artikel sind über `sort_order` geordnet; der Admin kann sie per Drag-and-Drop sortieren. Die vollständige Reihenfolge wird in einem Batch-RPC validiert und transaktional gespeichert.
+- Artikel sind in der Datenbank über `sort_order` geordnet; der Admin kann sie per Drag-and-Drop sortieren. Die vollständige Reihenfolge wird in einem Batch-RPC validiert und transaktional gespeichert.
 - Reservierungen werden atomar vorgenommen. Zwei gleichzeitige Reservierungen können denselben Artikel nicht doppelt belegen.
-- Die öffentliche API liefert keine Namen oder E-Mail-Adressen, sondern nur den Reservierungsstatus. Schenkerdaten sind ausschließlich im Admin-Bereich sichtbar.
+- Die öffentliche API liefert keine Namen oder E-Mail-Adressen, sondern nur den Reservierungsstatus. Schenkerdaten sind nur im Admin-Bereich sichtbar.
 - Artikel, Links und Preise können bearbeitet, ergänzt und gelöscht werden. Reservierungen lassen sich zurücksetzen.
 - Der INZONE H9 II ist als Hauptwunsch markiert.
 
 ## Projektstruktur
 
 ```text
+src/
+  components/AdminDashboard.tsx
+  lib/api.ts
+  lib/demo-items.ts
+    lib/product-images.ts
+  lib/supabase.ts
+  lib/types.ts
+  App.tsx
+  main.tsx
+  styles.css
+public/
+  products/ (14 lokale Produktbilder)
+PRODUCT_IMAGE_SOURCES.md
+supabase/
+  config.toml
+  migrations/
+    20261112182812_create_wishlist.sql
+    20261112182931_admin_rls.sql
 .github/workflows/deploy.yml
-README.md
-Weinachtswebseite/
-  .env.example
-  .gitignore
-  README.md
-  index.html
-  package.json
-  setup.ps1
-  src/
-    components/AdminDashboard.tsx
-    lib/api.ts
-    lib/demo-items.ts
-    lib/supabase.ts
-    lib/types.ts
-    App.tsx
-    main.tsx
-    styles.css
-  supabase/
-    config.toml
-    migrations/
-      20261112182812_create_wishlist.sql
-      20261112182931_admin_rls.sql
-  tsconfig.json
-  vite.config.ts
+setup.ps1
 ```
