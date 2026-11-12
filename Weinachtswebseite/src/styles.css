@@ -416,3 +416,105 @@ body::after {
   .password-setup h3 { grid-column: auto; }
   .password-setup-actions { flex-wrap: wrap; }
 }
+
+
+/* Winter scene details inspired by the reference design. */
+.site-shell { width: min(1024px, calc(100% - 72px)); position: relative; z-index: 1; }
+.topbar { height: 66px; }
+.topbar-actions { align-items: flex-start; flex-direction: column; gap: 2px; }
+.admin-area-link {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #537b98;
+  font-size: 10px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.admin-area-link:hover { border: 0; background: transparent; color: #315f7d; }
+.intro { grid-template-columns: 1fr .92fr; min-height: 345px; gap: 42px; padding: 38px 0 48px; }
+.intro-art {
+  height: auto;
+  aspect-ratio: 1.64;
+  border: 1px solid #bed3e4;
+  border-radius: 20px;
+  background: radial-gradient(2px 2px at 10% 15%, #f5fbff 98%, transparent), radial-gradient(1.5px 1.5px at 23% 31%, #d8edfa 98%, transparent), radial-gradient(2px 2px at 41% 12%, #f5fbff 98%, transparent), radial-gradient(1.5px 1.5px at 52% 37%, #d8edfa 98%, transparent), radial-gradient(2px 2px at 64% 17%, #f5fbff 98%, transparent), radial-gradient(1.5px 1.5px at 87% 46%, #d8edfa 98%, transparent), radial-gradient(2px 2px at 33% 53%, #f5fbff 98%, transparent), radial-gradient(1.5px 1.5px at 13% 68%, #d8edfa 98%, transparent), radial-gradient(circle at 75% 24%, #789fbc 0%, transparent 26%), linear-gradient(148deg, #284d69 0%, #183b57 58%, #102b43 100%);
+  box-shadow: 0 18px 50px #173b5729;
+}
+body::before { opacity: .28; }
+body::after { opacity: .16; }
+.winter-scenery {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.fir-sprig {
+  position: absolute;
+  top: -6px;
+  width: clamp(130px, 17vw, 250px);
+  color: #7894a6;
+  opacity: .5;
+  filter: drop-shadow(0 2px 2px #fff9);
+}
+.fir-sprig-left { left: -12px; }
+.fir-sprig-right { right: -12px; transform: scaleX(-1); }
+.winter-forest { position: absolute; right: auto; bottom: 0; width: 24vw; height: 40vh; min-height: 220px; }
+.winter-forest-left { left: 0; }
+.winter-forest-right { right: 0; }
+.forest-tree {
+  position: absolute;
+  bottom: -20px;
+  display: block;
+  clip-path: polygon(50% 0, 63% 21%, 56% 21%, 73% 41%, 63% 41%, 85% 63%, 73% 63%, 100% 87%, 62% 87%, 62% 100%, 38% 100%, 38% 87%, 0 87%, 27% 63%, 15% 63%, 37% 41%, 27% 41%, 44% 21%, 37% 21%);
+  background: linear-gradient(90deg, #688ca2 0%, #7194a8 48%, #526f80 100%);
+  filter: drop-shadow(0 3px 6px #38576b1a);
+}
+.forest-tree::before {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(155deg, transparent 0 19%, #edf7fc 19.5% 21%, transparent 21.5% 39%, #edf7fc 39.5% 41%, transparent 41.5% 60%, #edf7fc 60.5% 62%, transparent 62.5%);
+  content: '';
+}
+.tree-blue { background: linear-gradient(90deg, #47738e, #6391aa 52%, #3f6981); }
+.tree-slate { background: linear-gradient(90deg, #8499a0, #a3b4b5 52%, #6f8289); }
+.tree-pale { background: linear-gradient(90deg, #9fb6c3, #c1d2da 52%, #8ba2b0); }
+.snowfall { position: fixed; z-index: 12; inset: 0; overflow: hidden; pointer-events: none; }
+.snowflake {
+  position: absolute;
+  top: -9vh;
+  color: #f8fcff;
+  font-family: Georgia, serif;
+  line-height: 1;
+  text-shadow: 0 1px 5px #739bb64d;
+  animation-name: snowfall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+@keyframes snowfall {
+  from { transform: translate3d(0, -5vh, 0) rotate(0deg); }
+  to { transform: translate3d(var(--drift), 112vh, 0) rotate(360deg); }
+}
+@media (max-width: 900px) {
+  .site-shell { width: min(100% - 48px, 760px); }
+  .intro { grid-template-columns: 1fr .9fr; min-height: 320px; gap: 30px; }
+  .intro-art { aspect-ratio: 1.42; }
+  .winter-forest { width: 20vw; }
+}
+@media (max-width: 620px) {
+  .site-shell { width: calc(100% - 36px); }
+  .topbar { height: 70px; }
+  .topbar-actions { align-items: flex-end; }
+  .intro { min-height: 0; }
+  .intro-art { aspect-ratio: 1.6; }
+  .fir-sprig { width: 125px; opacity: .3; }
+  .winter-forest { width: 17vw; min-height: 165px; height: 28vh; }
+  .forest-tree { max-width: 58px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .snowflake { display: none; }
+}
