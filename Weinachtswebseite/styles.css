@@ -404,6 +404,8 @@ body::after {
 .password-setup input { min-height: 42px; padding: 0 12px; border: 1px solid #d7e4ed; border-radius: 8px; background: #fff; color: #29465d; font: inherit; }
 .password-setup input:focus { outline: 2px solid #7ea7c1; outline-offset: 1px; }
 .password-setup-actions { display: flex; align-items: center; gap: 12px; }
+.magic-link-button { width: 100%; min-height: 42px; justify-content: center; margin-top: 12px; }
+.login-note { margin: 12px 0 0; color: #4c7896; font-size: 12px; line-height: 1.6; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

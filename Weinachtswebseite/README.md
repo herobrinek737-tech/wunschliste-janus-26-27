@@ -30,7 +30,7 @@ npx supabase login
 
 ## Admin-Zugang
 
-Das erste Admin-Konto wurde im Supabase-Projekt eingeladen und in `public.wish_admins` freigeschaltet. Öffne den Einladungslink und danach die veröffentlichte Seite unter `/#/admin`. Wenn du den Link auf demselben Gerät und im selben Browser annimmst, wird die Einladungssitzung für die Anmeldung verwendet. Im Dashboard kannst du anschließend über **Passwort festlegen** ein dauerhaftes Passwort für spätere Anmeldungen einrichten.
+Das erste Admin-Konto wurde im Supabase-Projekt eingeladen und in `public.wish_admins` freigeschaltet. Öffne die veröffentlichte Seite unter `/#/admin`. Für die erste Anmeldung kannst du den Einladungslink oder **Anmeldelink per E-Mail senden** verwenden; öffne den Link im selben Browser. Im Dashboard kannst du anschließend über **Passwort festlegen** ein dauerhaftes Passwort für spätere Anmeldungen einrichten.
 
 Nur Benutzer, deren ID in `wish_admins` steht, erhalten Zugriff auf die Admin-Daten. RLS beschränkt zusätzlich den Tabellenzugriff. Die Seite bietet keine öffentliche Registrierung.
 

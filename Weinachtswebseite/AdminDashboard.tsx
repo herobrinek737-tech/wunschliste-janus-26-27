@@ -116,6 +116,7 @@ function AdminDashboard() {
   const [items, setItems] = useState<AdminWishItem[]>([])
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState(false)
+  const [loginNotice, setLoginNotice] = useState('')
   const [message, setMessage] = useState('')
   const [formError, setFormError] = useState('')
   const [editorOpen, setEditorOpen] = useState(false)
@@ -159,12 +160,36 @@ function AdminDashboard() {
     event.preventDefault()
     setPending(true)
     setFormError('')
+    setLoginNotice('')
     try {
       const { error } = await requireSupabase().auth.signInWithPassword({ email, password })
       if (error) throw error
       setPassword('')
     } catch (reason) {
       setFormError(reason instanceof Error ? reason.message : 'Anmeldung fehlgeschlagen.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function sendLoginLink() {
+    const address = email.trim()
+    if (!address) {
+      setFormError('Gib zuerst deine E-Mail-Adresse ein.')
+      return
+    }
+    setPending(true)
+    setFormError('')
+    setLoginNotice('')
+    try {
+      const { error } = await requireSupabase().auth.signInWithOtp({
+        email: address,
+        options: { shouldCreateUser: false },
+      })
+      if (error) throw error
+      setLoginNotice('Der Anmeldelink ist unterwegs. Öffne ihn in diesem Browser, um dich anzumelden.')
+    } catch (reason) {
+      setFormError(reason instanceof Error ? reason.message : 'Der Anmeldelink konnte nicht gesendet werden.')
     } finally {
       setPending(false)
     }
@@ -232,10 +257,10 @@ function AdminDashboard() {
   return (
     <main className="site-shell admin-shell">
       <header className="topbar">
-        <a className="brand" href="#" aria-label="Zur öffentlichen Wunschliste">
+        <a className="brand" href={window.location.pathname} aria-label="Zur öffentlichen Wunschliste">
           <span className="brand-mark">J</span><span>JANUS <i>·</i> 26/27</span>
         </a>
-        <a className="back-link" href="#">← Öffentliche Liste</a>
+        <a className="back-link" href={window.location.pathname}>← Öffentliche Liste</a>
       </header>
 
       <section className="admin-intro">
@@ -260,6 +285,8 @@ function AdminDashboard() {
             <label htmlFor="admin-password">Passwort</label>
             <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             <button className="gift-button modal-submit" disabled={pending}>{pending ? 'Meldet an …' : 'Anmelden'} <span aria-hidden="true">↗</span></button>
+            <button className="outline-button magic-link-button" type="button" disabled={pending} onClick={sendLoginLink}>{pending ? 'Wird gesendet …' : 'Anmeldelink per E-Mail senden'}</button>
+            {loginNotice && <p className="login-note" role="status">{loginNotice}</p>}
             {formError && <p className="form-message" role="alert">{formError}</p>}
           </form>
         </section>
