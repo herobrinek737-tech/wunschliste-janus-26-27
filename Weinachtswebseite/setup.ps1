@@ -15,9 +15,9 @@ if (-not (Test-Path '.env.local')) {
     Write-Host 'Die Datei .env.local wurde angelegt. Trage dort Supabase-URL und Publishable Key ein.'
 }
 
-npm install
+npm ci
 if ($LASTEXITCODE -ne 0) {
-    throw 'npm install ist fehlgeschlagen.'
+    throw 'npm ci ist fehlgeschlagen.'
 }
 
 if ($ProjectRef) {

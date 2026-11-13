@@ -37,7 +37,7 @@ jobs:
           test -n "$VITE_PAPA_PAYPAL_CHECKOUT_URL" || (echo "::error::Repository variable VITE_PAPA_PAYPAL_CHECKOUT_URL is missing" && exit 1)
       - name: Install dependencies
         working-directory: ./Weinachtswebseite
-        run: npm install
+        run: npm ci
       - name: Build site
         working-directory: ./Weinachtswebseite
         run: npm run build

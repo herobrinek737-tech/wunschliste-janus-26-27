@@ -120,3 +120,25 @@ export async function uploadProductImage(file: File, listSlug: WishListSlug) {
   if (error) throw error
   return client.storage.from('product-images').getPublicUrl(path).data.publicUrl
 }
+
+export async function removeUnlinkedProductImage(imageUrl?: string | null, currentImageUrl?: string | null) {
+  if (!imageUrl || imageUrl === currentImageUrl) return
+  const client = requireSupabase()
+  const bucket = client.storage.from('product-images')
+  const base = bucket.getPublicUrl('').data.publicUrl
+  if (!imageUrl.startsWith(base)) return
+  const path = imageUrl.slice(base.length)
+  if (!/^(janus|marlene)\/[0-9a-f-]{36}\.[a-z0-9]+$/i.test(path)) return
+  // The storage policy checks whether a wish still references this file.
+  try {
+    const { data: canRemove, error: checkError } = await client.rpc('can_remove_product_image', {
+      p_bucket: 'product-images',
+      p_path: path,
+    })
+    if (checkError || !canRemove) return
+    const { error } = await bucket.remove([path])
+    if (error) console.warn('Produktbild konnte nicht aufgeräumt werden.', error.message)
+  } catch {
+    console.warn('Produktbild konnte nicht aufgeräumt werden.')
+  }
+}

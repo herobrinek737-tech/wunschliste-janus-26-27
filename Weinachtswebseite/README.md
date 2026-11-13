@@ -49,21 +49,23 @@ Die E-Mail-Adresse im Formular allein erteilt keine Berechtigung. Die Datenbank 
 Das bestehende Repository veröffentlicht Änderungen am Branch `main` über GitHub Actions. Die Pages-Quelle ist **GitHub Actions**. Unter **Settings → Secrets and variables → Actions → Variables** müssen diese Repository-Variablen gesetzt sein:
    - `VITE_SUPABASE_URL` = `https://zwsjiygcegpwtxpxccxt.supabase.co`
    - `VITE_SUPABASE_PUBLISHABLE_KEY` = Publishable Key aus den Supabase Project Settings
-   - `VITE_PAPA_PAYPAL_ADDRESS` = Papas PayPal-Adresse, die im Footer und Warenkorb angezeigt wird
+   - `VITE_PAPA_PAYPAL_ADDRESS` = Papas PayPal-Adresse für die manuelle Eingabe bei PayPal
    - `VITE_PAPA_PAYPAL_CHECKOUT_URL` = Papas PayPal.Me-Link mit seinem PayPal-Benutzernamen oder offizieller Checkout-Link
 
-Die App liegt im Unterordner `Weinachtswebseite`; GitHub Actions verwendet deshalb den Workflow `.github/workflows/deploy.yml` im Repository-Hauptordner. Damit der PayPal-Wert beim Build in die App gelangt, muss dort unter `jobs.build.env` diese Zeile stehen:
+Der mitgelieferte Workflow `.github/workflows/deploy.yml` erwartet `package.json` im Repository-Stamm. Liegt die App im Zielrepository in einem Unterordner, passe dort das Arbeitsverzeichnis der npm-Schritte und den Pfad zum Pages-Artefakt an. Der Workflow übergibt die PayPal-Werte unter `jobs.build.env`:
 
 ```yaml
 VITE_PAPA_PAYPAL_ADDRESS: ${{ vars.VITE_PAPA_PAYPAL_ADDRESS }}
 VITE_PAPA_PAYPAL_CHECKOUT_URL: ${{ vars.VITE_PAPA_PAYPAL_CHECKOUT_URL }}
 ```
 
-Ohne diese Variablen zeigt die Seite den Platzhalter; der PayPal-Checkout-Link ist optional. Wenn er fehlt, öffnet „Jetzt bezahlen“ PayPals offizielle Seite zum Geldsenden und kopiert Papas E-Mail-Adresse. Der Absender fügt dort die Adresse ein und trägt den angezeigten Warenkorbgesamtbetrag ein. Dafür gibt es keinen unterstützten Direktlink, der Empfänger und Warenkorb aus der E-Mail-Adresse vorausfüllt. Bei einem PayPal.Me-Link wird der Gesamtbetrag an den Link angehängt. Die Wunschliste erhält von diesem manuellen Zahlungsweg keine automatische Zahlungsbestätigung; Geschenke müssen anschließend separat reserviert werden.
+Bei einem PayPal.Me-Link hängt die App den Gesamtbetrag an. Ist nur die PayPal-Adresse eingerichtet, öffnet „Mit PayPal zahlen“ die Seite zum Geldsenden. Dort gibt der Absender Adresse und Betrag ein. Über „Ich zahle anders“ können Schenkende Barzahlung oder Überweisung direkt mit Papa abstimmen. Zusagen und Reservierungen werden vor dem Zahlungswechsel eingetragen. Den Zahlungseingang gleicht Papa separat ab.
 
 Änderungen in `main` lösen den Build und die Veröffentlichung automatisch aus. Die Bilddateien liegen unter `public/products/` und werden gemeinsam mit der App ausgeliefert.
 
 GitHub Pages hostet nur die statische Oberfläche. Datenbank und API laufen in Supabase. Der Publishable Key darf im Browser verwendet werden; ein Secret- oder Service-Role-Key gehört niemals in die Frontend-Variablen oder in GitHub Actions Variables.
+
+Spiele die Migrationen in `supabase/migrations/` vor der Veröffentlichung ein. Sie korrigieren unter anderem die Startdaten und schützen Wünsche mit bestehenden Zusagen vor versehentlichem Löschen.
 
 ## Funktionen
 
@@ -71,7 +73,7 @@ GitHub Pages hostet nur die statische Oberfläche. Datenbank und API laufen in S
 - Reservierungen werden atomar vorgenommen. Zwei gleichzeitige Reservierungen können denselben Artikel nicht doppelt belegen.
 - Die öffentliche API liefert keine Namen oder E-Mail-Adressen, sondern nur Reservierungsstatus und aggregierte Beteiligungssummen. Ausschließlich ein Eintrag in `wish_reservation_viewers` kann Geschenkdetails abrufen.
 - Janus' Admin-Konto kann beide Listen bearbeiten. Artikel, Links, Preise und Produktbilder können ergänzt, geändert und gelöscht werden. Reservierungen lassen sich ohne Anzeige des Schenkernamens freigeben.
-- Janus' und Marlenes Wünsche landen im selben lokalen Warenkorb. „Schenken“ und „In den Warenkorb“ öffnen ihn direkt; nach Auswahl eines Teilbetrags wird dieser eingetragen und ebenfalls in den Warenkorb gelegt. Eine Beteiligung wird atomar gespeichert; die Gesamtsumme kann den Artikelpreis nicht überschreiten. „Jetzt bezahlen“ öffnet PayPal mit dem kombinierten Gesamtbetrag. Eine automatische Zahlungsbestätigung und Reservierung nach Zahlung benötigen eine PayPal-Checkout-Integration mit Händlerzugang.
+- Janus' und Marlenes Wünsche landen im selben lokalen Warenkorb. Einzelne Wünsche können reserviert und Teilbeträge zugesagt werden. Mehrere Zusagen für denselben Wunsch werden im Warenkorb addiert. Die Datenbank prüft bei jeder Zusage den offenen Restbetrag. Wenn die Positionen bestätigt sind, kann der geschätzte Gesamtbetrag per PayPal oder nach Absprache mit Papa bezahlt werden.
 - Produktbilder liegen im öffentlichen Supabase-Storage-Bucket `product-images`. Nur Admin-Konten dürfen dort hochladen oder löschen.
 - Der INZONE H9 II ist als Hauptwunsch markiert.
 
@@ -99,6 +101,8 @@ supabase/
     20261113125154_multi_wishlists_contributions_privacy.sql
     20261113125747_serialize_contribution_price_checks.sql
     20261113130157_legacy_admin_rpc_privacy_bridge.sql
-../.github/workflows/deploy.yml (Workflow im Haupt-Repository)
+    20261113154350_admin_manage_wish_contributions.sql
+    20261113160557_wishlist_integrity.sql
+.github/workflows/deploy.yml
 setup.ps1
 ```

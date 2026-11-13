@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
@@ -10,14 +10,15 @@ import {
   getAdminItems,
   getGiftActivity,
   resetItem,
+  removeUnlinkedProductImage,
   saveItem,
   saveOrder,
   uploadProductImage,
 } from '../lib/api'
 import { isSupabaseConfigured, requireSupabase } from '../lib/supabase'
+import { errorMessage, euroToCents, isPublicShopUrl } from '../lib/input'
 import type { AdminCapabilities, AdminContribution, AdminWishItem, GiftActivity, WishListSlug } from '../lib/types'
-
-const ADMIN_EMAIL = 'janus.kleine@cbg-duelmen.de'
+import Modal from './Modal'
 
 function money(cents: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
@@ -39,22 +40,34 @@ function SortableRow({
   onEdit,
   onReset,
   onDelete,
+  onMove,
+  canMoveUp,
+  canMoveDown,
 }: {
   item: AdminWishItem
   index: number
   onEdit: (item: AdminWishItem) => void
   onReset: (item: AdminWishItem) => void
   onDelete: (item: AdminWishItem) => void
+  onMove: (from: number, to: number) => void
+  canMoveUp: boolean
+  canMoveDown: boolean
 }) {
   const sortable = useSortable({ id: item.id, index })
   return (
     <tr ref={sortable.ref} className={sortable.isDragging ? 'admin-row dragging' : 'admin-row'}>
-      <td className="drag-cell"><button ref={sortable.handleRef} className="drag-handle" aria-label={'Sortiere ' + item.title} title="Ziehen zum Sortieren">⠿</button></td>
-      <td className="admin-item-title"><span className="mobile-row-label">Artikel</span><strong>{item.title}</strong><a href={item.url} target="_blank" rel="noreferrer">Shop öffnen ↗</a></td>
-      <td>{money(item.price_cents)}</td>
+      <td className="drag-cell">
+        <button ref={sortable.handleRef} className="drag-handle" aria-label={'Sortiere ' + item.title} title="Ziehen zum Sortieren">⠿</button>
+        <div className="sort-controls">
+          <button className="quiet-button" disabled={!canMoveUp} onClick={() => onMove(index, index - 1)} aria-label={`${item.title} nach oben verschieben`}>↑</button>
+          <button className="quiet-button" disabled={!canMoveDown} onClick={() => onMove(index, index + 1)} aria-label={`${item.title} nach unten verschieben`}>↓</button>
+        </div>
+      </td>
+      <td className="admin-item-title"><span className="mobile-row-label">Artikel</span><strong>{item.title}</strong>{isPublicShopUrl(item.url) ? <a href={item.url} target="_blank" rel="noreferrer">Shop öffnen ↗</a> : <small>Shop-Link prüfen</small>}</td>
+      <td>{item.price_cents > 0 ? money(item.price_cents) : 'Preis offen'}</td>
       <td>
         {item.is_reserved ? (
-          <span className="status-pill status-taken">Verschenkt</span>
+          <span className="status-pill status-taken">Reserviert</span>
         ) : item.contributed_cents > 0 ? (
           <div><span className="status-pill status-taken">Teilbeträge</span><small className="admin-contribution-total">{money(item.contributed_cents)} gesamt</small></div>
         ) : <span className="status-pill status-free">Verfügbar</span>}
@@ -73,21 +86,24 @@ function ItemEditor({
   listSlug,
   onClose,
   onSaved,
+  onNotice,
 }: {
   item: AdminWishItem | null
   listSlug: WishListSlug
   onClose: () => void
   onSaved: () => Promise<void>
+  onNotice: (notice: string) => void
 }) {
   const [title, setTitle] = useState(item?.title ?? '')
-  const [url, setUrl] = useState(item?.url ?? 'https://')
-  const [priceInput, setPriceInput] = useState(item ? (item.price_cents / 100).toFixed(2) : '')
+  const [url, setUrl] = useState(item?.url ?? '')
+  const [priceInput, setPriceInput] = useState(item?.price_cents ? (item.price_cents / 100).toFixed(2).replace('.', ',') : '')
   const [isFeatured, setIsFeatured] = useState(item?.is_featured ?? false)
   const [imageUrl, setImageUrl] = useState(item?.image_url ?? null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [filePreview, setFilePreview] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => () => {
     if (filePreview) URL.revokeObjectURL(filePreview)
@@ -95,7 +111,6 @@ function ItemEditor({
 
   function chooseImage(file: File | undefined) {
     setError('')
-    if (filePreview) URL.revokeObjectURL(filePreview)
     setFilePreview('')
     setImageFile(null)
     if (!file) return
@@ -113,56 +128,65 @@ function ItemEditor({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (pending) return
     setError('')
+    const priceCents = priceInput.trim() ? euroToCents(priceInput) : 0
+    if (priceCents === null || !title.trim() || !isPublicShopUrl(url.trim())) {
+      setError(priceCents === null ? 'Bitte gib einen Preis mit höchstens zwei Nachkommastellen ein.' : !title.trim() ? 'Bitte gib einen Produkttitel ein.' : 'Bitte gib einen vollständigen HTTPS-Link zu einem öffentlichen Shop ein.')
+      return
+    }
     setPending(true)
+    let uploadedImage: string | null = null
+    let saved = false
     try {
-      const numericPrice = Number(priceInput.replace(',', '.'))
-      if (!Number.isFinite(numericPrice) || numericPrice < 0) {
-        throw new Error('Bitte einen gültigen Preis eingeben.')
-      }
-      const savedImageUrl = imageFile ? await uploadProductImage(imageFile, listSlug) : imageUrl
+      if (imageFile) uploadedImage = await uploadProductImage(imageFile, listSlug)
       await saveItem({
         id: item?.id ?? null,
         list_slug: listSlug,
         title: title.trim(),
         url: url.trim(),
-        price_cents: Math.round(numericPrice * 100),
+        price_cents: priceCents,
         is_featured: isFeatured,
-        image_url: savedImageUrl,
+        image_url: uploadedImage ?? imageUrl,
       })
+      saved = true
+      await removeUnlinkedProductImage(item?.image_url, uploadedImage ?? imageUrl)
       await onSaved()
+      onNotice('Wunsch gespeichert.')
       onClose()
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Der Artikel konnte nicht gespeichert werden.')
+      if (!saved) await removeUnlinkedProductImage(uploadedImage)
+      setError(errorMessage(reason, 'Der Artikel konnte nicht gespeichert werden.'))
     } finally {
       setPending(false)
     }
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section className="reserve-modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title">
-        <button className="modal-close" onClick={onClose} aria-label="Schließen">×</button>
-        <p className="eyebrow">Wunschliste {listSlug === 'marlene' ? 'Marlene' : 'Janus'} bearbeiten</p>
-        <h2 id="editor-title">{item ? 'Artikel ändern' : 'Wunsch hinzufügen'}</h2>
-        <form onSubmit={submit}>
-          <label htmlFor="item-title">Produkttitel</label>
-          <input id="item-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required />
-          <label htmlFor="item-url">Shop-Link</label>
-          <input id="item-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} required />
-          <label htmlFor="item-price">Preis in Euro</label>
-          <input id="item-price" inputMode="decimal" value={priceInput} onChange={(event) => setPriceInput(event.target.value)} required placeholder="0,00" />
-          <label className="product-upload" htmlFor="item-image">Produktbild hochladen <span>(JPG, PNG, WebP oder GIF · bis 5 MB)</span>
-            <input id="item-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => chooseImage(event.target.files?.[0])} />
-          </label>
-          {(filePreview || imageUrl) && <img className="upload-preview" src={filePreview || imageUrl || ''} alt="Vorschau des Produktbilds" />}
-          {imageUrl && !filePreview && <button className="quiet-button" type="button" onClick={() => setImageUrl(null)}>Bild entfernen</button>}
-          <label className="featured-option"><input type="checkbox" checked={isFeatured} onChange={(event) => setIsFeatured(event.target.checked)} /> Als Hauptwunsch hervorheben</label>
-          <button className="gift-button modal-submit" disabled={pending}>{pending ? 'Speichert …' : 'Speichern'} <span aria-hidden="true">↗</span></button>
-          {error && <p className="form-message" role="alert">{error}</p>}
-        </form>
-      </section>
-    </div>
+    <Modal className="editor-modal" titleId="editor-title" busy={pending} onClose={onClose}>
+      <p className="eyebrow">Wunschliste {listSlug === 'marlene' ? 'Marlene' : 'Janus'} bearbeiten</p>
+      <h2 id="editor-title">{item ? 'Artikel ändern' : 'Wunsch hinzufügen'}</h2>
+      <form onSubmit={submit}>
+        <label htmlFor="item-title">Produkttitel</label>
+        <input id="item-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required />
+        <label htmlFor="item-url">Shop-Link</label>
+        <input id="item-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} required />
+        <label htmlFor="item-price">Geschätzter Preis in Euro <span>(optional)</span></label>
+        <input id="item-price" inputMode="decimal" value={priceInput} onChange={(event) => setPriceInput(event.target.value)} placeholder="Preis offen" />
+        <label className="product-upload" htmlFor="item-image">Produktbild hochladen <span>(JPG, PNG, WebP oder GIF · bis 5 MB)</span>
+          <input ref={fileInput} id="item-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => chooseImage(event.target.files?.[0])} />
+        </label>
+        {(filePreview || imageUrl) && <img className="upload-preview" src={filePreview || imageUrl || ''} alt="Vorschau des Produktbilds" />}
+        {imageUrl && !filePreview && <button className="quiet-button" type="button" onClick={() => setImageUrl(null)}>Bild entfernen</button>}
+        {filePreview && <button className="quiet-button" type="button" onClick={() => {
+          chooseImage(undefined)
+          if (fileInput.current) fileInput.current.value = ''
+        }}>Neue Bildauswahl entfernen</button>}
+        <label className="featured-option"><input type="checkbox" checked={isFeatured} onChange={(event) => setIsFeatured(event.target.checked)} /> Als Hauptwunsch hervorheben</label>
+        <button className="gift-button modal-submit" disabled={pending}>{pending ? 'Speichert …' : 'Speichern'} <span aria-hidden="true">↗</span></button>
+        {error && <p className="form-message" role="alert">{error}</p>}
+      </form>
+    </Modal>
   )
 }
 
@@ -212,15 +236,18 @@ function AdminDashboard() {
   const [password, setPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [loginEmail, setLoginEmail] = useState(ADMIN_EMAIL)
+  const [loginEmail, setLoginEmail] = useState('')
+  const loginEmailInput = useRef<HTMLInputElement>(null)
   const [passwordFormOpen, setPasswordFormOpen] = useState(false)
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null)
   const [capabilities, setCapabilities] = useState<AdminCapabilities | null>(null)
-  const [listSlug, setListSlug] = useState<WishListSlug>('janus')
+  const [listSlug, setListSlug] = useState<WishListSlug>(() => new URLSearchParams(window.location.search).get('list') === 'marlene' ? 'marlene' : 'janus')
   const [items, setItems] = useState<AdminWishItem[]>([])
   const [activity, setActivity] = useState<GiftActivity[]>([])
   const [contributions, setContributions] = useState<AdminContribution[]>([])
   const [loading, setLoading] = useState(true)
+  const [checkingSession, setCheckingSession] = useState(isSupabaseConfigured)
+  const [savingOrder, setSavingOrder] = useState(false)
   const [pending, setPending] = useState(false)
   const [loginCooldown, setLoginCooldown] = useState(0)
   const [loginNotice, setLoginNotice] = useState('')
@@ -260,7 +287,7 @@ function AdminDashboard() {
       }
       setFormError('')
     } catch (reason) {
-      const problem = reason instanceof Error ? reason.message : 'Admin-Daten konnten nicht geladen werden.'
+      const problem = errorMessage(reason, 'Admin-Daten konnten nicht geladen werden.')
       setFormError(problem)
       setItems([])
       setActivity([])
@@ -277,11 +304,20 @@ function AdminDashboard() {
       return
     }
     const client = requireSupabase()
-    client.auth.getSession().then(({ data }) => setSignedInEmail(data.session?.user.email ?? null))
+    let active = true
+    client.auth.getSession().then(({ data, error }) => {
+      if (!active) return
+      if (error) setFormError('Die Anmeldung konnte nicht geprüft werden.')
+      setSignedInEmail(data.session?.user.email ?? null)
+      setCheckingSession(false)
+    })
     const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
       setSignedInEmail(session?.user.email ?? null)
     })
-    return () => listener.subscription.unsubscribe()
+    return () => {
+      active = false
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -312,7 +348,7 @@ function AdminDashboard() {
   }
 
   async function sendLoginLink() {
-    if (pending || loginCooldown > 0) return
+    if (pending || loginCooldown > 0 || !loginEmailInput.current?.reportValidity()) return
     setPending(true)
     setFormError('')
     setLoginNotice('')
@@ -358,7 +394,7 @@ function AdminDashboard() {
       setNewPassword('')
       setConfirmPassword('')
       setPasswordFormOpen(false)
-      setMessage('Passwort gespeichert. Ab jetzt meldest du dich nur mit diesem Passwort an.')
+      setMessage('Passwort gespeichert. Du kannst dich jetzt auch mit deinem Passwort anmelden.')
     } catch (reason) {
       setFormError(reason instanceof Error ? reason.message : 'Das Passwort konnte nicht gespeichert werden.')
     } finally {
@@ -367,12 +403,24 @@ function AdminDashboard() {
   }
 
   async function signOut() {
-    await requireSupabase().auth.signOut()
-    setItems([])
-    setActivity([])
-    setContributions([])
-    setCapabilities(null)
-    setMessage('Du wurdest abgemeldet.')
+    if (pending) return
+    setPending(true)
+    setFormError('')
+    setMessage('')
+    try {
+      const { error } = await requireSupabase().auth.signOut()
+      if (error) throw error
+      setSignedInEmail(null)
+      setEditorOpen(false)
+      setPasswordFormOpen(false)
+      setNewPassword('')
+      setConfirmPassword('')
+      setLoginNotice('Du wurdest abgemeldet.')
+    } catch {
+      setFormError('Abmelden fehlgeschlagen. Du bist noch angemeldet. Bitte versuche es erneut.')
+    } finally {
+      setPending(false)
+    }
   }
 
   async function handleReset(item: AdminWishItem) {
@@ -388,13 +436,18 @@ function AdminDashboard() {
   }
 
   async function handleDelete(item: AdminWishItem) {
+    if (item.is_reserved || item.contributed_cents > 0) {
+      setFormError('Dieser Wunsch hat eine Reservierung oder Teilbeträge. Kläre die offenen Zusagen, bevor du ihn löschst.')
+      return
+    }
     if (!window.confirm('„' + item.title + '“ endgültig aus der Wunschliste löschen?')) return
     try {
       await deleteItem(item.id, listSlug)
+      await removeUnlinkedProductImage(item.image_url)
       setMessage('Artikel gelöscht.')
       await refresh()
     } catch (reason) {
-      setFormError(reason instanceof Error ? reason.message : 'Der Artikel konnte nicht gelöscht werden.')
+      setFormError(errorMessage(reason, 'Der Artikel konnte nicht gelöscht werden.'))
     }
   }
 
@@ -417,6 +470,40 @@ function AdminDashboard() {
   function openEditor(item: AdminWishItem | null) {
     setEditing(item)
     setEditorOpen(true)
+  }
+
+  function selectList(slug: WishListSlug) {
+    if (slug === listSlug || savingOrder) return
+    setLoading(true)
+    setListSlug(slug)
+    setEditorOpen(false)
+    setMessage('')
+    const url = new URL(window.location.href)
+    if (slug === 'marlene') url.searchParams.set('list', 'marlene')
+    else url.searchParams.delete('list')
+    window.history.replaceState(window.history.state, '', url)
+  }
+
+  async function moveItem(from: number, to: number) {
+    if (savingOrder || from === to || !items[from] || !items[to]) return
+    const previous = items
+    const next = [...items]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    setItems(next)
+    setSavingOrder(true)
+    setFormError('')
+    setMessage('Reihenfolge wird gespeichert …')
+    try {
+      await saveOrder(next.map((wish) => wish.id), listSlug)
+      setMessage('Neue Reihenfolge gespeichert.')
+    } catch (reason) {
+      setItems(previous)
+      setMessage('')
+      setFormError(errorMessage(reason, 'Die Reihenfolge konnte nicht gespeichert werden.'))
+    } finally {
+      setSavingOrder(false)
+    }
   }
 
   const canEdit = capabilities?.can_edit ?? false
@@ -443,13 +530,15 @@ function AdminDashboard() {
           <h2>Supabase verbinden</h2>
           <p>Trage Projekt-URL und Publishable Key in .env.local ein, um das Admin-Dashboard zu verwenden.</p>
         </div>
+      ) : checkingSession ? (
+        <div className="loading-state" role="status">Anmeldung wird geprüft …</div>
       ) : !signedInEmail ? (
         <section className="admin-login">
           <p className="eyebrow">Nur freigeschaltete Konten</p>
           <h2>Admin-Anmeldung</h2>
           <form onSubmit={signIn}>
             <label htmlFor="admin-email">E-Mail-Adresse</label>
-            <input id="admin-email" type="email" autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} required />
+            <input ref={loginEmailInput} id="admin-email" type="email" autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} required />
             <label htmlFor="admin-password">Admin-Passwort</label>
             <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             <button className="gift-button modal-submit" disabled={pending}>{pending ? 'Meldet an …' : 'Anmelden'} <span aria-hidden="true">↗</span></button>
@@ -466,10 +555,10 @@ function AdminDashboard() {
             <div className="admin-toolbar-actions">
               {canEdit && <button className="outline-button" onClick={() => openEditor(null)}>+ Artikel hinzufügen</button>}
               <button className="quiet-button" onClick={() => { setPasswordFormOpen((open) => !open); setFormError('') }}>Passwort festlegen</button>
-              <button className="quiet-button" onClick={signOut}>Abmelden</button>
+              <button className="quiet-button" onClick={signOut} disabled={pending || savingOrder}>Abmelden</button>
             </div>
           </div>
-          {message && <div className="notice-banner">{message}<button onClick={() => setMessage('')} aria-label="Hinweis schließen">×</button></div>}
+          {message && <div className="notice-banner"><span role="status">{message}</span><button onClick={() => setMessage('')} aria-label="Hinweis schließen">×</button></div>}
           {formError && <div className="error-banner" role="alert">{formError}<button onClick={() => setFormError('')} aria-label="Fehler schließen">×</button></div>}
           {passwordFormOpen && <form className="password-setup" onSubmit={setAccountPassword}>
             <h3>Dein Admin-Passwort</h3>
@@ -481,35 +570,20 @@ function AdminDashboard() {
             <>
               {canEdit && <>
                 <div className="admin-list-tabs" role="group" aria-label="Wunschliste wählen">
-                  <button className="outline-button" aria-pressed={listSlug === 'janus'} onClick={() => { setListSlug('janus'); setEditorOpen(false) }}>Janus</button>
-                  <button className="outline-button" aria-pressed={listSlug === 'marlene'} onClick={() => { setListSlug('marlene'); setEditorOpen(false) }}>Marlene</button>
+                  <button className="outline-button" disabled={savingOrder} aria-pressed={listSlug === 'janus'} onClick={() => selectList('janus')}>Janus</button>
+                  <button className="outline-button" disabled={savingOrder} aria-pressed={listSlug === 'marlene'} onClick={() => selectList('marlene')}>Marlene</button>
                 </div>
-                <p className="drag-hint">Ziehe die Artikel am Griff in deine Wunschreihenfolge. Nur der Reservierungsstatus erscheint in dieser Liste.</p>
+                <p className="drag-hint">Ziehe die Artikel am Griff oder nutze die Pfeile, um die Reihenfolge zu ändern.</p>
                 <div className="admin-table-wrap">
                   <table className="admin-table">
                     <thead><tr><th aria-label="Sortierung" /><th>Artikel</th><th>Preis</th><th>Status</th><th>Aktionen</th></tr></thead>
-                    <DragDropProvider onDragEnd={async (event) => {
+                    <DragDropProvider onDragEnd={(event) => {
                       if (event.canceled || !isSortable(event.operation.source)) return
                       const { initialIndex, index } = event.operation.source
-                      if (initialIndex === index) return
-                      const next = [...items]
-                      const [moved] = next.splice(initialIndex, 1)
-                      if (!moved) return
-                      next.splice(index, 0, moved)
-                      setItems(next)
-                      setMessage('Reihenfolge wird gespeichert …')
-                      try {
-                        await saveOrder(next.map((wish) => wish.id), listSlug)
-                        setMessage('Neue Reihenfolge gespeichert.')
-                      } catch (reason) {
-                        const problem = reason instanceof Error ? reason.message : 'Die Reihenfolge konnte nicht gespeichert werden.'
-                        try { setItems(await getAdminItems(listSlug)) } catch { /* keep the current view visible */ }
-                        setMessage('')
-                        setFormError(problem)
-                      }
+                      void moveItem(initialIndex, index)
                     }}>
                       <tbody>
-                        {items.map((item, index) => <SortableRow key={item.id} item={item} index={index} onEdit={openEditor} onReset={handleReset} onDelete={handleDelete} />)}
+                        {items.map((item, index) => <SortableRow key={item.id} item={item} index={index} onEdit={openEditor} onReset={handleReset} onDelete={handleDelete} onMove={moveItem} canMoveUp={!savingOrder && index > 0} canMoveDown={!savingOrder && index < items.length - 1} />)}
                       </tbody>
                     </DragDropProvider>
                   </table>
@@ -525,7 +599,7 @@ function AdminDashboard() {
       )}
 
       <footer className="site-footer"><span>Admin · Wunschlisten Janus und Marlene</span><span>Reservierungsdetails sind nur für Papas freigeschaltetes Konto sichtbar.</span></footer>
-      {editorOpen && canEdit && <ItemEditor key={`${listSlug}-${editing?.id ?? 'new'}`} item={editing} listSlug={listSlug} onClose={() => setEditorOpen(false)} onSaved={refresh} />}
+      {editorOpen && canEdit && <ItemEditor key={`${listSlug}-${editing?.id ?? 'new'}`} item={editing} listSlug={listSlug} onClose={() => setEditorOpen(false)} onSaved={refresh} onNotice={setMessage} />}
     </main>
   )
 }
