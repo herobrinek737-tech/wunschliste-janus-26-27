@@ -528,6 +528,12 @@ body::after {
 .cart-pay { margin-top: 12px; text-decoration: none; }
 .cart-setup-note { margin: 12px 0 0; color: #728799; font-size: 10px; line-height: 1.6; }
 .cart-payment-note { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: #eef6f9; color: #3d6983; font-size: 11px; line-height: 1.5; }
+.gift-button-secondary { border-color: #8eafc5; background: #edf5fa; color: #315f7d; }
+.gift-button-secondary:hover:not(:disabled) { border-color: #7fa7c2; background: #dfedf6; color: #244e6b; }
+.gift-button-secondary:disabled { border-color: #d6e1e9; background: #edf3f7; color: #788c9a; }
+.cart-row-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; }
+.cart-list-label { color: #537b98 !important; font-size: 9px !important; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.cart-reserve { color: #416d8c; }
 
 .winter-scenery {
   position: fixed;

@@ -71,7 +71,7 @@ GitHub Pages hostet nur die statische Oberfläche. Datenbank und API laufen in S
 - Reservierungen werden atomar vorgenommen. Zwei gleichzeitige Reservierungen können denselben Artikel nicht doppelt belegen.
 - Die öffentliche API liefert keine Namen oder E-Mail-Adressen, sondern nur Reservierungsstatus und aggregierte Beteiligungssummen. Ausschließlich ein Eintrag in `wish_reservation_viewers` kann Geschenkdetails abrufen.
 - Janus' Admin-Konto kann beide Listen bearbeiten. Artikel, Links, Preise und Produktbilder können ergänzt, geändert und gelöscht werden. Reservierungen lassen sich ohne Anzeige des Schenkernamens freigeben.
-- Besucher können Wünsche in einen lokalen Warenkorb legen, reservieren oder einen selbst gewählten Teilbetrag beitragen. Eine Beteiligung wird atomar gespeichert; die Gesamtsumme kann den Artikelpreis nicht überschreiten. „Jetzt bezahlen“ öffnet PayPal mit kopierter Empfänger-E-Mail und sichtbarem Gesamtbetrag. Eine automatische Zahlungsbestätigung und Reservierung nach Zahlung benötigen eine PayPal-Checkout-Integration mit Händlerzugang.
+- Janus' und Marlenes Wünsche landen im selben lokalen Warenkorb. „Schenken“ und „In den Warenkorb“ öffnen ihn direkt; nach Auswahl eines Teilbetrags wird dieser eingetragen und ebenfalls in den Warenkorb gelegt. Eine Beteiligung wird atomar gespeichert; die Gesamtsumme kann den Artikelpreis nicht überschreiten. „Jetzt bezahlen“ öffnet PayPal mit dem kombinierten Gesamtbetrag. Eine automatische Zahlungsbestätigung und Reservierung nach Zahlung benötigen eine PayPal-Checkout-Integration mit Händlerzugang.
 - Produktbilder liegen im öffentlichen Supabase-Storage-Bucket `product-images`. Nur Admin-Konten dürfen dort hochladen oder löschen.
 - Der INZONE H9 II ist als Hauptwunsch markiert.
 

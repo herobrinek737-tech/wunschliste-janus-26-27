@@ -34,6 +34,8 @@ const paypalAddress = import.meta.env.VITE_PAPA_PAYPAL_ADDRESS?.trim() || '[Hier
 const paypalCheckoutUrl = import.meta.env.VITE_PAPA_PAYPAL_CHECKOUT_URL?.trim() || ''
 const paypalSendUrl = 'https://www.paypal.com/de/digital-wallet/send-receive-money/send-money'
 const cartStorageKey = 'wishlist-cart-by-list-v1'
+type CartByList = Record<WishListSlug, Record<string, number>>
+type CartLine = { item: PublicWishItem; listSlug: WishListSlug; amountCents: number; isContribution: boolean }
 
 function price(cents: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
@@ -60,15 +62,25 @@ function getListHref(listSlug: WishListSlug) {
   return `${url.pathname}${url.search}`
 }
 
-function readCartByList(): Record<WishListSlug, string[]> {
+function readCartEntries(value: unknown): Record<string, number> {
+  if (Array.isArray(value)) {
+    return Object.fromEntries(value.filter((id): id is string => typeof id === 'string').map((id) => [id, 0]))
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[0] === 'string' && typeof entry[1] === 'number' && Number.isFinite(entry[1]) && entry[1] >= 0))
+  }
+  return {}
+}
+
+function readCartByList(): CartByList {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(cartStorageKey) || '{}') as Record<string, unknown>
     return {
-      janus: Array.isArray(parsed.janus) ? parsed.janus.filter((id): id is string => typeof id === 'string') : [],
-      marlene: Array.isArray(parsed.marlene) ? parsed.marlene.filter((id): id is string => typeof id === 'string') : [],
+      janus: readCartEntries(parsed.janus),
+      marlene: readCartEntries(parsed.marlene),
     }
   } catch {
-    return { janus: [], marlene: [] }
+    return { janus: {}, marlene: {} }
   }
 }
 
@@ -114,22 +126,36 @@ function ProductArtwork({ item, index }: { item: PublicWishItem; index: number }
 function App() {
   const [isAdminRoute, setIsAdminRoute] = useState(isAdminLocation)
   const [listSlug, setListSlug] = useState<WishListSlug>(getListSlug)
-  const [items, setItems] = useState<PublicWishItem[]>(isSupabaseConfigured ? [] : getListSlug() === 'janus' ? demoWishItems : [])
-  const [cartByList, setCartByList] = useState<Record<WishListSlug, string[]>>(readCartByList)
+  const [itemsByList, setItemsByList] = useState<Record<WishListSlug, PublicWishItem[]>>(() => ({ janus: isSupabaseConfigured ? [] : demoWishItems, marlene: [] }))
+  const items = itemsByList[listSlug] ?? []
+  const [cartByList, setCartByList] = useState<CartByList>(readCartByList)
   const [cartOpen, setCartOpen] = useState(false)
+  const [cartLoading, setCartLoading] = useState(false)
+  const [cartError, setCartError] = useState('')
   const [cartPaymentNote, setCartPaymentNote] = useState('')
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<PublicWishItem | null>(null)
+  const [selectedListSlug, setSelectedListSlug] = useState<WishListSlug>('janus')
   const [selectedAction, setSelectedAction] = useState<'reserve' | 'contribute'>('reserve')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [amount, setAmount] = useState('')
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
-  const cartIds = cartByList[listSlug] ?? []
-  const cartItems = items.filter((item) => cartIds.includes(item.id) && !item.is_reserved && item.remaining_cents > 0)
-  const cartTotalCents = cartItems.reduce((sum, item) => sum + item.remaining_cents, 0)
+  const cartIds = Object.keys(cartByList[listSlug] ?? {})
+  const cartItems: CartLine[] = (['janus', 'marlene'] as const).flatMap((cartListSlug) =>
+    Object.entries(cartByList[cartListSlug] ?? {}).flatMap(([itemId, savedAmount]) => {
+      const item = itemsByList[cartListSlug].find((entry) => entry.id === itemId)
+      if (!item || item.is_reserved) return []
+      const isContribution = savedAmount > 0
+      const amountCents = isContribution ? savedAmount : item.remaining_cents
+      if (amountCents <= 0) return []
+      return [{ item, listSlug: cartListSlug, amountCents, isContribution }]
+    }),
+  )
+  const cartCount = (Object.values(cartByList) as Array<Record<string, number>>).reduce((sum, entries) => sum + Object.keys(entries).length, 0)
+  const cartTotalCents = cartItems.reduce((sum, line) => sum + line.amountCents, 0)
 
   useEffect(() => {
     try {
@@ -141,14 +167,15 @@ function App() {
 
   async function refreshItems() {
     if (!isSupabaseConfigured) {
-      setItems(listSlug === 'janus' ? demoWishItems : [])
+      setItemsByList((current) => ({ ...current, [listSlug]: listSlug === 'janus' ? demoWishItems : [] }))
       setLoading(false)
       return
     }
     setLoading(true)
     setError('')
     try {
-      setItems(await getPublicItems(listSlug))
+      const refreshedItems = await getPublicItems(listSlug)
+      setItemsByList((current) => ({ ...current, [listSlug]: refreshedItems }))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Die Wunschliste konnte nicht geladen werden.')
     } finally {
@@ -170,6 +197,29 @@ function App() {
     }
   }, [listSlug])
 
+  async function refreshCombinedCartItems() {
+    setCartLoading(true)
+    setCartError('')
+    try {
+      if (!isSupabaseConfigured) {
+        setItemsByList((current) => ({ ...current, janus: demoWishItems, marlene: [] }))
+        return
+      }
+      const [janusItems, marleneItems] = await Promise.all([getPublicItems('janus'), getPublicItems('marlene')])
+      setItemsByList({ janus: janusItems, marlene: marleneItems })
+    } catch (reason) {
+      setCartError(reason instanceof Error ? reason.message : 'Der gemeinsame Warenkorb konnte nicht geladen werden.')
+    } finally {
+      setCartLoading(false)
+    }
+  }
+
+  function openCart() {
+    setCartOpen(true)
+    setCartPaymentNote('')
+    void refreshCombinedCartItems()
+  }
+
   async function submitReservation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selected) return
@@ -183,6 +233,11 @@ function App() {
           await refreshItems()
           return
         }
+        setCartByList((current) => {
+          const updatedList = { ...(current[selectedListSlug] ?? {}) }
+          delete updatedList[selected.id]
+          return { ...current, [selectedListSlug]: updatedList }
+        })
       } else {
         const numericAmount = Number(amount.replace(',', '.'))
         if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
@@ -195,13 +250,21 @@ function App() {
           return
         }
         await contributeItem(selected.id, name, email, amountCents)
+        setCartByList((current) => ({
+          ...current,
+          [selectedListSlug]: { ...(current[selectedListSlug] ?? {}), [selected.id]: amountCents },
+        }))
       }
       setSelected(null)
       setName('')
       setEmail('')
       setAmount('')
-      setNotice(selectedAction === 'reserve' ? 'Danke! Der Artikel ist jetzt für dich reserviert.' : 'Danke! Deine Beteiligung wurde eingetragen.')
       await refreshItems()
+      if (selectedAction === 'contribute') {
+        openCart()
+      } else {
+        setNotice('Danke! Der Artikel ist jetzt für dich reserviert.')
+      }
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : 'Die Aktion ist fehlgeschlagen.')
       await refreshItems()
@@ -210,18 +273,22 @@ function App() {
     }
   }
 
-  function addToCart(item: PublicWishItem) {
+  function addToCart(item: PublicWishItem, itemListSlug: WishListSlug = listSlug) {
     setCartByList((current) => {
-      const currentIds = current[listSlug] ?? []
-      if (currentIds.includes(item.id)) return current
-      return { ...current, [listSlug]: [...currentIds, item.id] }
+      const currentEntries = current[itemListSlug] ?? {}
+      if (Object.hasOwn(currentEntries, item.id)) return current
+      return { ...current, [itemListSlug]: { ...currentEntries, [item.id]: 0 } }
     })
-    setNotice('Der Wunsch wurde zum Warenkorb hinzugefügt.')
+    openCart()
   }
 
-  function removeFromCart(itemId: string) {
+  function removeFromCart(itemId: string, itemListSlug: WishListSlug) {
     setCartPaymentNote('')
-    setCartByList((current) => ({ ...current, [listSlug]: (current[listSlug] ?? []).filter((id) => id !== itemId) }))
+    setCartByList((current) => {
+      const updatedList = { ...(current[itemListSlug] ?? {}) }
+      delete updatedList[itemId]
+      return { ...current, [itemListSlug]: updatedList }
+    })
   }
 
   async function prepareManualPayPal() {
@@ -265,8 +332,8 @@ function App() {
         </a>
         <div className="topbar-actions">
           <div className="topbar-note"><span className="topbar-dot" /> Weihnachtswünsche</div>
-          <button className="admin-area-link cart-toggle" onClick={() => setCartOpen(true)} aria-label={`Warenkorb mit ${cartItems.length} Artikeln öffnen`}>
-            Warenkorb <span className="cart-count">{cartItems.length}</span>
+          <button className="admin-area-link cart-toggle" onClick={openCart} aria-label={`Gemeinsamen Warenkorb mit ${cartCount} Artikeln öffnen`}>
+            Warenkorb <span className="cart-count">{cartCount}</span>
           </button>
           <a className="admin-area-link sister-list-link" href={getListHref(listSlug === 'marlene' ? 'janus' : 'marlene')}>
             {listSlug === 'marlene' ? 'Zur Wunschliste von Janus' : 'Zur Wunschliste von Marlene'} <span aria-hidden="true">↗</span>
@@ -327,13 +394,13 @@ function App() {
                     <button className="gift-button gift-button-done" disabled>Gemeinsam finanziert</button>
                   ) : (
                     <div className="gift-actions">
-                      <button className="gift-button" onClick={() => { setSelected(item); setSelectedAction('reserve'); setNotice('') }} disabled={!isSupabaseConfigured || item.contributed_cents > 0}>
-                        Schenken <span aria-hidden="true">↗</span>
+                      <button className="gift-button" onClick={() => addToCart(item, listSlug)} disabled={!isSupabaseConfigured || item.contributed_cents > 0}>
+                        {cartIds.includes(item.id) ? 'Warenkorb öffnen' : 'Schenken'} <span aria-hidden="true">↗</span>
                       </button>
-                      <button className="gift-button gift-button-cart" onClick={() => addToCart(item)} disabled={!isSupabaseConfigured || cartIds.includes(item.id)}>
-                        {cartIds.includes(item.id) ? 'Im Warenkorb' : 'In den Warenkorb'} <span aria-hidden="true">＋</span>
+                      <button className="gift-button gift-button-cart" onClick={() => addToCart(item, listSlug)} disabled={!isSupabaseConfigured}>
+                        {cartIds.includes(item.id) ? 'Zum Warenkorb' : 'In den Warenkorb'} <span aria-hidden="true">＋</span>
                       </button>
-                      <button className="gift-button gift-button-secondary" onClick={() => { setSelected(item); setSelectedAction('contribute'); setNotice('') }} disabled={!isSupabaseConfigured}>
+                      <button className="gift-button gift-button-secondary" onClick={() => { setSelected(item); setSelectedListSlug(listSlug); setSelectedAction('contribute'); setAmount(''); setName(''); setEmail(''); setNotice('') }} disabled={!isSupabaseConfigured}>
                         Beteiligen <span aria-hidden="true">＋</span>
                       </button>
                     </div>
@@ -369,7 +436,7 @@ function App() {
               <label htmlFor="giver-email">E-Mail <span>(optional)</span></label>
               <input id="giver-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} maxLength={254} autoComplete="email" placeholder="Für Rückfragen" />
               <p className="privacy-note">Dein Name und deine E-Mail werden nur dem Papa-Account angezeigt und nicht öffentlich geteilt.</p>
-              <button className="gift-button modal-submit" disabled={saving}>{saving ? 'Wird gespeichert …' : selectedAction === 'reserve' ? 'Wunsch reservieren' : 'Beteiligung eintragen'} <span aria-hidden="true">↗</span></button>
+              <button className="gift-button modal-submit" disabled={saving}>{saving ? 'Wird gespeichert …' : selectedAction === 'reserve' ? 'Wunsch reservieren' : 'Beteiligung eintragen & zum Warenkorb'} <span aria-hidden="true">↗</span></button>
               {notice && <p className="form-message" role="alert">{notice}</p>}
             </form>
           </section>
@@ -380,17 +447,26 @@ function App() {
         <div className="modal-backdrop cart-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false) }}>
           <section className="reserve-modal cart-modal" role="dialog" aria-modal="true" aria-labelledby="cart-title">
             <button className="modal-close" onClick={() => setCartOpen(false)} aria-label="Warenkorb schließen">×</button>
-            <p className="eyebrow">{listSlug === 'marlene' ? 'Wunschliste Marlene' : 'Wunschliste Janus'}</p>
+            <p className="eyebrow">Wunschlisten Janus &amp; Marlene</p>
             <h2 id="cart-title">Dein Warenkorb</h2>
-            {cartItems.length === 0 ? (
+            {cartLoading && <div className="loading-state"><span className="loader" /> Gemeinsamer Warenkorb wird geladen …</div>}
+            {cartError && <p className="form-message" role="alert">{cartError}</p>}
+            {!cartLoading && !cartError && cartItems.length === 0 ? (
               <p className="cart-empty">Hier liegen noch keine verfügbaren Wünsche.</p>
-            ) : (
+            ) : !cartLoading && (
               <>
                 <ul className="cart-list">
-                  {cartItems.map((item) => (
-                    <li key={item.id}>
-                      <span><strong>{item.title}</strong><small>{price(item.remaining_cents)} {item.contributed_cents > 0 ? 'noch offen' : ''}</small></span>
-                      <button className="cart-remove" onClick={() => removeFromCart(item.id)} aria-label={`${item.title} aus dem Warenkorb entfernen`}>Entfernen</button>
+                  {cartItems.map((line) => (
+                    <li key={`${line.listSlug}-${line.item.id}`}>
+                      <span>
+                        <small className="cart-list-label">Wunschliste {line.listSlug === 'marlene' ? 'Marlene' : 'Janus'}</small>
+                        <strong>{line.item.title}</strong>
+                        <small>{price(line.amountCents)} · {line.isContribution ? 'Teilbetrag' : line.item.contributed_cents > 0 ? 'Restbetrag' : 'Geschenk'}</small>
+                      </span>
+                      <div className="cart-row-actions">
+                        {!line.isContribution && <button className="cart-remove cart-reserve" onClick={() => { setSelected(line.item); setSelectedListSlug(line.listSlug); setSelectedAction('reserve'); setName(''); setEmail(''); setNotice(''); setCartOpen(false) }}>Reservieren</button>}
+                        <button className="cart-remove" onClick={() => removeFromCart(line.item.id, line.listSlug)} aria-label={`${line.item.title} aus dem Warenkorb entfernen`}>Entfernen</button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -405,8 +481,8 @@ function App() {
                     Jetzt bezahlen <span aria-hidden="true">↗</span>
                   </a>
                 )}
-                {!paypalCheckoutUrl && <p className="cart-setup-note">PayPal öffnet in einem neuen Tab. Die Adresse wird kopiert; füge sie dort als Empfänger ein und gib den Gesamtbetrag manuell ein. Danach bitte die Wünsche separat über „Schenken“ reservieren. Die Zahlung wird nicht automatisch in dieser Liste bestätigt.</p>}
-                {paypalCheckoutUrl && <p className="cart-setup-note">Bitte prüfe Empfänger und Betrag bei PayPal. Die Wunschliste erhält keine automatische Zahlungsbestätigung. Reserviere die Wünsche nach der Zahlung hier separat über „Schenken“.</p>}
+                {!paypalCheckoutUrl && <p className="cart-setup-note">PayPal öffnet in einem neuen Tab. Die Adresse wird kopiert; füge sie dort als Empfänger ein und gib den Gesamtbetrag manuell ein. Nach der Zahlung kannst du Geschenke hier über „Reservieren“ eintragen. Die Zahlung wird nicht automatisch in dieser Liste bestätigt.</p>}
+                {paypalCheckoutUrl && <p className="cart-setup-note">Bitte prüfe Empfänger und Betrag bei PayPal. Die Wunschliste erhält keine automatische Zahlungsbestätigung. Nach der Zahlung kannst du Geschenke hier über „Reservieren“ eintragen.</p>}
                 {cartPaymentNote && <p className="cart-payment-note" role="status">{cartPaymentNote}</p>}
               </>
             )}
