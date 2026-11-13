@@ -188,7 +188,10 @@ function AdminDashboard() {
     try {
       const { error } = await requireSupabase().auth.signInWithOtp({
         email: ADMIN_EMAIL,
-        options: { shouldCreateUser: false },
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: new URL('./?admin=setup', window.location.href).href,
+        },
       })
       if (error) throw error
       setLoginCooldown(60)
