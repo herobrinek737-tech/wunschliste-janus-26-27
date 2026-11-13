@@ -2,14 +2,33 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
-import { deleteItem, getAdminItems, resetItem, saveItem, saveOrder } from '../lib/api'
+import {
+  deleteItem,
+  getAdminCapabilities,
+  getAdminItems,
+  getGiftActivity,
+  resetItem,
+  saveItem,
+  saveOrder,
+  uploadProductImage,
+} from '../lib/api'
 import { isSupabaseConfigured, requireSupabase } from '../lib/supabase'
-import type { AdminWishItem } from '../lib/types'
+import type { AdminCapabilities, AdminWishItem, GiftActivity, WishListSlug } from '../lib/types'
 
 const ADMIN_EMAIL = 'janus.kleine@cbg-duelmen.de'
 
 function money(cents: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
+}
+
+function publicListHref(listSlug: WishListSlug) {
+  const url = new URL(window.location.href)
+  url.hash = ''
+  url.searchParams.delete('admin')
+  url.searchParams.delete('code')
+  if (listSlug === 'marlene') url.searchParams.set('list', 'marlene')
+  else url.searchParams.delete('list')
+  return `${url.pathname}${url.search}`
 }
 
 function SortableRow({
@@ -32,13 +51,15 @@ function SortableRow({
       <td className="admin-item-title"><span className="mobile-row-label">Artikel</span><strong>{item.title}</strong><a href={item.url} target="_blank" rel="noreferrer">Shop öffnen ↗</a></td>
       <td>{money(item.price_cents)}</td>
       <td>
-        {item.reserved_by ? (
-          <div className="giver-info"><span className="status-pill status-taken">Verschenkt</span><strong>{item.reserved_by}</strong>{item.reserved_email && <small>{item.reserved_email}</small>}</div>
+        {item.is_reserved ? (
+          <span className="status-pill status-taken">Verschenkt</span>
+        ) : item.contributed_cents > 0 ? (
+          <div><span className="status-pill status-taken">Teilbeträge</span><small className="admin-contribution-total">{money(item.contributed_cents)} gesamt</small></div>
         ) : <span className="status-pill status-free">Verfügbar</span>}
       </td>
       <td className="actions-cell">
         <button className="text-action" onClick={() => onEdit(item)}>Bearbeiten</button>
-        {item.reserved_by && <button className="text-action" onClick={() => onReset(item)}>Freigeben</button>}
+        {item.is_reserved && <button className="text-action" onClick={() => onReset(item)}>Freigeben</button>}
         <button className="text-action text-danger" onClick={() => onDelete(item)}>Löschen</button>
       </td>
     </tr>
@@ -47,10 +68,12 @@ function SortableRow({
 
 function ItemEditor({
   item,
+  listSlug,
   onClose,
   onSaved,
 }: {
   item: AdminWishItem | null
+  listSlug: WishListSlug
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
@@ -58,8 +81,33 @@ function ItemEditor({
   const [url, setUrl] = useState(item?.url ?? 'https://')
   const [priceInput, setPriceInput] = useState(item ? (item.price_cents / 100).toFixed(2) : '')
   const [isFeatured, setIsFeatured] = useState(item?.is_featured ?? false)
+  const [imageUrl, setImageUrl] = useState(item?.image_url ?? null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [filePreview, setFilePreview] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => () => {
+    if (filePreview) URL.revokeObjectURL(filePreview)
+  }, [filePreview])
+
+  function chooseImage(file: File | undefined) {
+    setError('')
+    if (filePreview) URL.revokeObjectURL(filePreview)
+    setFilePreview('')
+    setImageFile(null)
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setError('Bitte wähle ein JPG-, PNG-, WebP- oder GIF-Bild aus.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Das Bild darf höchstens 5 MB groß sein.')
+      return
+    }
+    setImageFile(file)
+    setFilePreview(URL.createObjectURL(file))
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -70,12 +118,15 @@ function ItemEditor({
       if (!Number.isFinite(numericPrice) || numericPrice < 0) {
         throw new Error('Bitte einen gültigen Preis eingeben.')
       }
+      const savedImageUrl = imageFile ? await uploadProductImage(imageFile, listSlug) : imageUrl
       await saveItem({
         id: item?.id ?? null,
+        list_slug: listSlug,
         title: title.trim(),
         url: url.trim(),
         price_cents: Math.round(numericPrice * 100),
         is_featured: isFeatured,
+        image_url: savedImageUrl,
       })
       await onSaved()
       onClose()
@@ -90,7 +141,7 @@ function ItemEditor({
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <section className="reserve-modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title">
         <button className="modal-close" onClick={onClose} aria-label="Schließen">×</button>
-        <p className="eyebrow">Wunschliste bearbeiten</p>
+        <p className="eyebrow">Wunschliste {listSlug === 'marlene' ? 'Marlene' : 'Janus'} bearbeiten</p>
         <h2 id="editor-title">{item ? 'Artikel ändern' : 'Wunsch hinzufügen'}</h2>
         <form onSubmit={submit}>
           <label htmlFor="item-title">Produkttitel</label>
@@ -99,6 +150,11 @@ function ItemEditor({
           <input id="item-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} required />
           <label htmlFor="item-price">Preis in Euro</label>
           <input id="item-price" inputMode="decimal" value={priceInput} onChange={(event) => setPriceInput(event.target.value)} required placeholder="0,00" />
+          <label className="product-upload" htmlFor="item-image">Produktbild hochladen <span>(JPG, PNG, WebP oder GIF · bis 5 MB)</span>
+            <input id="item-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => chooseImage(event.target.files?.[0])} />
+          </label>
+          {(filePreview || imageUrl) && <img className="upload-preview" src={filePreview || imageUrl || ''} alt="Vorschau des Produktbilds" />}
+          {imageUrl && !filePreview && <button className="quiet-button" type="button" onClick={() => setImageUrl(null)}>Bild entfernen</button>}
           <label className="featured-option"><input type="checkbox" checked={isFeatured} onChange={(event) => setIsFeatured(event.target.checked)} /> Als Hauptwunsch hervorheben</label>
           <button className="gift-button modal-submit" disabled={pending}>{pending ? 'Speichert …' : 'Speichern'} <span aria-hidden="true">↗</span></button>
           {error && <p className="form-message" role="alert">{error}</p>}
@@ -108,13 +164,33 @@ function ItemEditor({
   )
 }
 
+function GiftActivityList({ activity }: { activity: GiftActivity[] }) {
+  return (
+    <section className="gift-activity" aria-labelledby="gift-activity-title">
+      <h3 id="gift-activity-title">Schenkungen und Beteiligungen</h3>
+      <p className="admin-status-note">Diese Übersicht ist nur für Papas freigeschaltetes Konto sichtbar. Janus sieht im Admin-Bereich ausschließlich den Reservierungsstatus.</p>
+      {activity.length === 0 ? <div className="empty-state">Bisher wurden noch keine Geschenke reserviert oder Teilbeträge eingetragen.</div> : activity.map((entry) => (
+        <article className="gift-activity-row" key={`${entry.activity_kind}-${entry.activity_id}`}>
+          <div><strong>{entry.item_title}</strong><small>{entry.list_slug === 'marlene' ? 'Wunschliste Marlene' : 'Wunschliste Janus'} · {entry.activity_kind}</small></div>
+          <div><strong>{entry.giver_name}</strong>{entry.giver_email && <small>{entry.giver_email}</small>}</div>
+          <div className="gift-activity-amount">{money(entry.amount_cents)}</div>
+        </article>
+      ))}
+    </section>
+  )
+}
+
 function AdminDashboard() {
   const [password, setPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [loginEmail, setLoginEmail] = useState(ADMIN_EMAIL)
   const [passwordFormOpen, setPasswordFormOpen] = useState(false)
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null)
+  const [capabilities, setCapabilities] = useState<AdminCapabilities | null>(null)
+  const [listSlug, setListSlug] = useState<WishListSlug>('janus')
   const [items, setItems] = useState<AdminWishItem[]>([])
+  const [activity, setActivity] = useState<GiftActivity[]>([])
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState(false)
   const [loginCooldown, setLoginCooldown] = useState(0)
@@ -133,14 +209,26 @@ function AdminDashboard() {
   async function refresh() {
     setLoading(true)
     try {
-      setItems(await getAdminItems())
+      const roles = await getAdminCapabilities()
+      setCapabilities(roles)
+      if (!roles.can_edit && !roles.can_view_givers) {
+        setItems([])
+        setActivity([])
+        setFormError('Dieses Konto hat keine Berechtigung für den Wunschlisten-Admin.')
+        await requireSupabase().auth.signOut()
+        return
+      }
+      if (roles.can_edit) setItems(await getAdminItems(listSlug))
+      else setItems([])
+      if (roles.can_view_givers) setActivity(await getGiftActivity())
+      else setActivity([])
       setFormError('')
     } catch (reason) {
       const problem = reason instanceof Error ? reason.message : 'Admin-Daten konnten nicht geladen werden.'
       setFormError(problem)
-      if (/autorisiert/i.test(problem)) {
-        await requireSupabase().auth.signOut()
-      }
+      setItems([])
+      setActivity([])
+      if (/autorisiert/i.test(problem)) await requireSupabase().auth.signOut()
     } finally {
       setLoading(false)
     }
@@ -161,8 +249,13 @@ function AdminDashboard() {
 
   useEffect(() => {
     if (signedInEmail) void refresh()
-    else setItems([])
-  }, [signedInEmail])
+    else {
+      setItems([])
+      setActivity([])
+      setCapabilities(null)
+      setLoading(false)
+    }
+  }, [signedInEmail, listSlug])
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -170,7 +263,7 @@ function AdminDashboard() {
     setFormError('')
     setLoginNotice('')
     try {
-      const { error } = await requireSupabase().auth.signInWithPassword({ email: ADMIN_EMAIL, password })
+      const { error } = await requireSupabase().auth.signInWithPassword({ email: loginEmail.trim(), password })
       if (error) throw error
       setPassword('')
     } catch (reason) {
@@ -187,7 +280,7 @@ function AdminDashboard() {
     setLoginNotice('')
     try {
       const { error } = await requireSupabase().auth.signInWithOtp({
-        email: ADMIN_EMAIL,
+        email: loginEmail.trim(),
         options: {
           shouldCreateUser: false,
           emailRedirectTo: new URL('./?admin=setup', window.location.href).href,
@@ -237,13 +330,16 @@ function AdminDashboard() {
 
   async function signOut() {
     await requireSupabase().auth.signOut()
+    setItems([])
+    setActivity([])
+    setCapabilities(null)
     setMessage('Du wurdest abgemeldet.')
   }
 
   async function handleReset(item: AdminWishItem) {
     if (!window.confirm('Reservierung von „' + item.title + '“ wirklich aufheben?')) return
     try {
-      const changed = await resetItem(item.id)
+      const changed = await resetItem(item.id, listSlug)
       if (!changed) throw new Error('Der Artikel konnte nicht gefunden werden.')
       setMessage('Reservierung aufgehoben.')
       await refresh()
@@ -255,7 +351,7 @@ function AdminDashboard() {
   async function handleDelete(item: AdminWishItem) {
     if (!window.confirm('„' + item.title + '“ endgültig aus der Wunschliste löschen?')) return
     try {
-      await deleteItem(item.id)
+      await deleteItem(item.id, listSlug)
       setMessage('Artikel gelöscht.')
       await refresh()
     } catch (reason) {
@@ -268,19 +364,22 @@ function AdminDashboard() {
     setEditorOpen(true)
   }
 
+  const canEdit = capabilities?.can_edit ?? false
+  const canViewGivers = capabilities?.can_view_givers ?? false
+
   return (
     <main className="site-shell admin-shell">
       <header className="topbar">
-        <a className="brand" href={window.location.pathname} aria-label="Zur öffentlichen Wunschliste">
-          <span className="brand-mark">J</span><span>JANUS <i>·</i> 26/27</span>
+        <a className="brand" href={publicListHref(listSlug)} aria-label="Zur öffentlichen Wunschliste">
+          <span className="brand-mark">{listSlug === 'marlene' ? 'M' : 'J'}</span><span>{listSlug === 'marlene' ? 'MARLENE' : 'JANUS'} <i>·</i> 26/27</span>
         </a>
-        <a className="back-link" href={window.location.pathname}>← Öffentliche Liste</a>
+        <a className="back-link" href={publicListHref(listSlug)}>← Öffentliche Liste</a>
       </header>
 
       <section className="admin-intro">
         <p className="eyebrow">Privater Bereich</p>
         <h1>Wunschliste <em>verwalten.</em></h1>
-        <p>Artikel pflegen, Reservierungen sehen und die Reihenfolge anpassen.</p>
+        <p>Artikel pflegen und Reservierungen schützen die Überraschung.</p>
       </section>
 
       {!isSupabaseConfigured ? (
@@ -291,9 +390,11 @@ function AdminDashboard() {
         </div>
       ) : !signedInEmail ? (
         <section className="admin-login">
-          <p className="eyebrow">Nur für Janus</p>
+          <p className="eyebrow">Nur freigeschaltete Konten</p>
           <h2>Admin-Anmeldung</h2>
           <form onSubmit={signIn}>
+            <label htmlFor="admin-email">E-Mail-Adresse</label>
+            <input id="admin-email" type="email" autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} required />
             <label htmlFor="admin-password">Admin-Passwort</label>
             <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             <button className="gift-button modal-submit" disabled={pending}>{pending ? 'Meldet an …' : 'Anmelden'} <span aria-hidden="true">↗</span></button>
@@ -301,12 +402,17 @@ function AdminDashboard() {
             {loginNotice && <p className="login-note" role="status">{loginNotice}</p>}
             {formError && <p className="form-message" role="alert">{formError}</p>}
           </form>
+          <p className="login-note">Die Datenbank schaltet Listenbearbeitung und Einsicht in Schenkerdaten getrennt frei.</p>
         </section>
       ) : (
         <section className="admin-section">
           <div className="admin-toolbar">
-            <div><p className="eyebrow">Angemeldet als {signedInEmail}</p><h2>Alle Wünsche <span>{items.length}</span></h2></div>
-            <div className="admin-toolbar-actions"><button className="outline-button" onClick={() => openEditor(null)}>+ Artikel hinzufügen</button><button className="quiet-button" onClick={() => { setPasswordFormOpen((open) => !open); setFormError('') }}>Passwort festlegen</button><button className="quiet-button" onClick={signOut}>Abmelden</button></div>
+            <div><p className="eyebrow">Angemeldet als {signedInEmail}</p><h2>{canEdit ? 'Wunschlisten' : 'Geschenke'} <span>{canEdit ? items.length : activity.length}</span></h2></div>
+            <div className="admin-toolbar-actions">
+              {canEdit && <button className="outline-button" onClick={() => openEditor(null)}>+ Artikel hinzufügen</button>}
+              <button className="quiet-button" onClick={() => { setPasswordFormOpen((open) => !open); setFormError('') }}>Passwort festlegen</button>
+              <button className="quiet-button" onClick={signOut}>Abmelden</button>
+            </div>
           </div>
           {message && <div className="notice-banner">{message}<button onClick={() => setMessage('')} aria-label="Hinweis schließen">×</button></div>}
           {formError && <div className="error-banner" role="alert">{formError}<button onClick={() => setFormError('')} aria-label="Fehler schließen">×</button></div>}
@@ -318,49 +424,53 @@ function AdminDashboard() {
           </form>}
           {loading ? <div className="loading-state"><span className="loader" /> Daten werden geladen …</div> : (
             <>
-              <p className="drag-hint">Ziehe die Artikel am Griff in deine Wunschreihenfolge. Die Änderung wird direkt gespeichert.</p>
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead><tr><th aria-label="Sortierung" /><th>Artikel</th><th>Preis</th><th>Status · Schenker</th><th>Aktionen</th></tr></thead>
-                  <DragDropProvider onDragEnd={async (event) => {
-                    if (event.canceled || !isSortable(event.operation.source)) return
-                    const { initialIndex, index } = event.operation.source
-                    if (initialIndex === index) return
-                    const next = [...items]
-                    const [moved] = next.splice(initialIndex, 1)
-                    if (!moved) return
-                    next.splice(index, 0, moved)
-                    setItems(next)
-                    setMessage('Reihenfolge wird gespeichert …')
-                    try {
-                      await saveOrder(next.map((item) => item.id))
-                      setMessage('Neue Reihenfolge gespeichert.')
-                    } catch (reason) {
-                      const problem = reason instanceof Error ? reason.message : 'Die Reihenfolge konnte nicht gespeichert werden.'
+              {canEdit && <>
+                <div className="admin-list-tabs" role="group" aria-label="Wunschliste wählen">
+                  <button className="outline-button" aria-pressed={listSlug === 'janus'} onClick={() => { setListSlug('janus'); setEditorOpen(false) }}>Janus</button>
+                  <button className="outline-button" aria-pressed={listSlug === 'marlene'} onClick={() => { setListSlug('marlene'); setEditorOpen(false) }}>Marlene</button>
+                </div>
+                <p className="drag-hint">Ziehe die Artikel am Griff in deine Wunschreihenfolge. Nur der Reservierungsstatus erscheint in dieser Liste.</p>
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead><tr><th aria-label="Sortierung" /><th>Artikel</th><th>Preis</th><th>Status</th><th>Aktionen</th></tr></thead>
+                    <DragDropProvider onDragEnd={async (event) => {
+                      if (event.canceled || !isSortable(event.operation.source)) return
+                      const { initialIndex, index } = event.operation.source
+                      if (initialIndex === index) return
+                      const next = [...items]
+                      const [moved] = next.splice(initialIndex, 1)
+                      if (!moved) return
+                      next.splice(index, 0, moved)
+                      setItems(next)
+                      setMessage('Reihenfolge wird gespeichert …')
                       try {
-                        setItems(await getAdminItems())
-                      } catch {
-                        // Keep the current list visible if the refresh also fails.
+                        await saveOrder(next.map((wish) => wish.id), listSlug)
+                        setMessage('Neue Reihenfolge gespeichert.')
+                      } catch (reason) {
+                        const problem = reason instanceof Error ? reason.message : 'Die Reihenfolge konnte nicht gespeichert werden.'
+                        try { setItems(await getAdminItems(listSlug)) } catch { /* keep the current view visible */ }
+                        setMessage('')
+                        setFormError(problem)
                       }
-                      setMessage('')
-                      setFormError(problem)
-                    }
-                  }}>
-                    <tbody>
-                      {items.map((item, index) => (
-                        <SortableRow key={item.id} item={item} index={index} onEdit={openEditor} onReset={handleReset} onDelete={handleDelete} />
-                      ))}
-                    </tbody>
-                  </DragDropProvider>
-                </table>
-              </div>
+                    }}>
+                      <tbody>
+                        {items.map((item, index) => <SortableRow key={item.id} item={item} index={index} onEdit={openEditor} onReset={handleReset} onDelete={handleDelete} />)}
+                      </tbody>
+                    </DragDropProvider>
+                  </table>
+                  {items.length === 0 && <div className="empty-state">Auf dieser Wunschliste stehen noch keine Artikel.</div>}
+                </div>
+              </>}
+              {canViewGivers && <GiftActivityList activity={activity} />}
+              {canEdit && !canViewGivers && <p className="admin-status-note">Schenker-Namen, E-Mail-Adressen und einzelne Teilbeträge sind für dieses Konto gesperrt und nur für Papas freigeschaltetes Konto sichtbar.</p>}
+              {!canEdit && !canViewGivers && <div className="empty-state">Dieses Konto ist nicht für den Admin-Bereich freigeschaltet.</div>}
             </>
           )}
         </section>
       )}
 
-      <footer className="site-footer"><span>Admin · Wunschliste Janus 26/27</span><span>Reservierungsdaten sind nur für Admins sichtbar.</span></footer>
-      {editorOpen && <ItemEditor item={editing} onClose={() => setEditorOpen(false)} onSaved={refresh} />}
+      <footer className="site-footer"><span>Admin · Wunschlisten Janus und Marlene</span><span>Reservierungsdetails sind nur für Papas freigeschaltetes Konto sichtbar.</span></footer>
+      {editorOpen && canEdit && <ItemEditor key={`${listSlug}-${editing?.id ?? 'new'}`} item={editing} listSlug={listSlug} onClose={() => setEditorOpen(false)} onSaved={refresh} />}
     </main>
   )
 }

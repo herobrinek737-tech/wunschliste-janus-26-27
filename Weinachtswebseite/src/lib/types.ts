@@ -1,3 +1,5 @@
+export type WishListSlug = 'janus' | 'marlene'
+
 export type PublicWishItem = {
   id: string
   title: string
@@ -6,6 +8,9 @@ export type PublicWishItem = {
   sort_order: number
   is_featured: boolean
   is_reserved: boolean
+  image_url: string | null
+  contributed_cents: number
+  remaining_cents: number
 }
 
 export type AdminWishItem = {
@@ -15,7 +20,24 @@ export type AdminWishItem = {
   price_cents: number
   sort_order: number
   is_featured: boolean
-  reserved_by: string | null
-  reserved_email: string | null
-  reserved_at: string | null
+  image_url: string | null
+  is_reserved: boolean
+  contributed_cents: number
+}
+
+export type GiftActivity = {
+  activity_id: string
+  item_id: string
+  list_slug: WishListSlug
+  item_title: string
+  activity_kind: 'Schenkung' | 'Beteiligung'
+  giver_name: string
+  giver_email: string | null
+  amount_cents: number
+  activity_at: string
+}
+
+export type AdminCapabilities = {
+  can_edit: boolean
+  can_view_givers: boolean
 }

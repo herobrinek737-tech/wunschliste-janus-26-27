@@ -1,6 +1,8 @@
 import type { PublicWishItem } from './types'
 
-export const demoItems: PublicWishItem[] = [
+type DemoWishItem = Omit<PublicWishItem, 'image_url' | 'contributed_cents' | 'remaining_cents'>
+
+const demoItems: DemoWishItem[] = [
   { id: 'demo-1', title: 'INZONE H9 II schwarz', url: 'https://www.sony.de/gaming-gear/products/inzone-h9-ii', price_cents: 29999, sort_order: 0, is_featured: true, is_reserved: false },
   { id: 'demo-2', title: 'Xiaomi Watch 2', url: 'https://www.mi.com/de/product/xiaomi-watch-2/', price_cents: 12999, sort_order: 1, is_featured: false, is_reserved: false },
   { id: 'demo-3', title: 'Monster Energy Ultra White Zero Sugar, 12x 500ml', url: 'https://www.steam-time.de/monster-ultra-white-zero-sugar-energy-drink-12x-500ml', price_cents: 2399, sort_order: 2, is_featured: false, is_reserved: false },
@@ -16,3 +18,10 @@ export const demoItems: PublicWishItem[] = [
   { id: 'demo-13', title: 'Grefay Fahrrad Handyhalterung', url: 'https://www.amazon.de/dp/B07GQLYPZZ/', price_cents: 1999, sort_order: 12, is_featured: false, is_reserved: false },
   { id: 'demo-14', title: 'WMF Kult X Go Mixer', url: 'https://www.amazon.de/dp/B0FSL2832J', price_cents: 2499, sort_order: 13, is_featured: false, is_reserved: false },
 ]
+
+export const demoWishItems: PublicWishItem[] = demoItems.map((item) => ({
+  ...item,
+  image_url: null,
+  contributed_cents: 0,
+  remaining_cents: item.price_cents,
+}))

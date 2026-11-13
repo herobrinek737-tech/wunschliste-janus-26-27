@@ -20,6 +20,8 @@ jobs:
     env:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_PAPA_PAYPAL_ADDRESS: ${{ vars.VITE_PAPA_PAYPAL_ADDRESS }}
+      VITE_PAPA_PAYPAL_CHECKOUT_URL: ${{ vars.VITE_PAPA_PAYPAL_CHECKOUT_URL }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -31,6 +33,8 @@ jobs:
         run: |
           test -n "$VITE_SUPABASE_URL" || (echo "::error::Repository variable VITE_SUPABASE_URL is missing" && exit 1)
           test -n "$VITE_SUPABASE_PUBLISHABLE_KEY" || (echo "::error::Repository variable VITE_SUPABASE_PUBLISHABLE_KEY is missing" && exit 1)
+          test -n "$VITE_PAPA_PAYPAL_ADDRESS" || (echo "::error::Repository variable VITE_PAPA_PAYPAL_ADDRESS is missing" && exit 1)
+          test -n "$VITE_PAPA_PAYPAL_CHECKOUT_URL" || (echo "::error::Repository variable VITE_PAPA_PAYPAL_CHECKOUT_URL is missing" && exit 1)
       - name: Install dependencies
         working-directory: ./Weinachtswebseite
         run: npm install
