@@ -1,5 +1,5 @@
 import { requireSupabase } from './supabase'
-import type { AdminCapabilities, AdminWishItem, GiftActivity, PublicWishItem, WishListSlug } from './types'
+import type { AdminCapabilities, AdminContribution, AdminWishItem, GiftActivity, PublicWishItem, WishListSlug } from './types'
 
 export async function getPublicItems(listSlug: WishListSlug) {
   const client = requireSupabase()
@@ -50,6 +50,20 @@ export async function getGiftActivity() {
   const { data, error } = await client.rpc('papa_list_gift_activity')
   if (error) throw error
   return (data ?? []) as GiftActivity[]
+}
+
+export async function getAdminContributions(listSlug: WishListSlug) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('admin_list_wish_contributions', { p_list_slug: listSlug })
+  if (error) throw error
+  return (data ?? []) as AdminContribution[]
+}
+
+export async function deleteContribution(contributionId: string) {
+  const client = requireSupabase()
+  const { data, error } = await client.rpc('admin_delete_wish_contribution', { p_contribution_id: contributionId })
+  if (error) throw error
+  return data as boolean
 }
 
 export async function saveItem(item: {

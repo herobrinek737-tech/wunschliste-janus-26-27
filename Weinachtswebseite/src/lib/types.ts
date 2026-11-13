@@ -37,6 +37,14 @@ export type GiftActivity = {
   activity_at: string
 }
 
+export type AdminContribution = {
+  activity_id: string
+  item_id: string
+  list_slug: WishListSlug
+  item_title: string
+  amount_cents: number
+}
+
 export type AdminCapabilities = {
   can_edit: boolean
   can_view_givers: boolean

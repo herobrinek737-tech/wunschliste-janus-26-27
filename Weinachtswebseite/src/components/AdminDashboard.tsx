@@ -3,8 +3,10 @@ import type { FormEvent } from 'react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
 import {
+  deleteContribution,
   deleteItem,
   getAdminCapabilities,
+  getAdminContributions,
   getAdminItems,
   getGiftActivity,
   resetItem,
@@ -13,7 +15,7 @@ import {
   uploadProductImage,
 } from '../lib/api'
 import { isSupabaseConfigured, requireSupabase } from '../lib/supabase'
-import type { AdminCapabilities, AdminWishItem, GiftActivity, WishListSlug } from '../lib/types'
+import type { AdminCapabilities, AdminContribution, AdminWishItem, GiftActivity, WishListSlug } from '../lib/types'
 
 const ADMIN_EMAIL = 'janus.kleine@cbg-duelmen.de'
 
@@ -164,16 +166,42 @@ function ItemEditor({
   )
 }
 
-function GiftActivityList({ activity }: { activity: GiftActivity[] }) {
+function GiftActivityList({ activity, canDeleteContributions, onDeleteContribution }: {
+  activity: GiftActivity[]
+  canDeleteContributions: boolean
+  onDeleteContribution: (entry: { activity_id: string; item_title: string; amount_cents: number }) => void
+}) {
   return (
     <section className="gift-activity" aria-labelledby="gift-activity-title">
       <h3 id="gift-activity-title">Schenkungen und Beteiligungen</h3>
-      <p className="admin-status-note">Diese Übersicht ist nur für Papas freigeschaltetes Konto sichtbar. Janus sieht im Admin-Bereich ausschließlich den Reservierungsstatus.</p>
+      <p className="admin-status-note">Namen und E-Mail-Adressen dieser Übersicht sind nur für Papas freigeschaltetes Konto sichtbar.</p>
       {activity.length === 0 ? <div className="empty-state">Bisher wurden noch keine Geschenke reserviert oder Teilbeträge eingetragen.</div> : activity.map((entry) => (
         <article className="gift-activity-row" key={`${entry.activity_kind}-${entry.activity_id}`}>
           <div><strong>{entry.item_title}</strong><small>{entry.list_slug === 'marlene' ? 'Wunschliste Marlene' : 'Wunschliste Janus'} · {entry.activity_kind}</small></div>
           <div><strong>{entry.giver_name}</strong>{entry.giver_email && <small>{entry.giver_email}</small>}</div>
+          <div className="gift-activity-controls">
+            <div className="gift-activity-amount">{money(entry.amount_cents)}</div>
+            {canDeleteContributions && entry.activity_kind === 'Beteiligung' && <button className="text-action text-danger" onClick={() => onDeleteContribution(entry)}>Betrag löschen</button>}
+          </div>
+        </article>
+      ))}
+    </section>
+  )
+}
+
+function AdminContributionList({ contributions, onDelete }: {
+  contributions: AdminContribution[]
+  onDelete: (entry: AdminContribution) => void
+}) {
+  return (
+    <section className="gift-activity" aria-labelledby="admin-contributions-title">
+      <h3 id="admin-contributions-title">Teilbeträge verwalten</h3>
+      <p className="admin-status-note">Hier siehst du nur Wunsch und Betrag. Namen und E-Mail-Adressen bleiben verborgen. Löschen aktualisiert den offenen Restbetrag.</p>
+      {contributions.length === 0 ? <div className="empty-state">Für diese Wunschliste gibt es noch keine Teilbeträge.</div> : contributions.map((entry) => (
+        <article className="gift-activity-row admin-contribution-row" key={entry.activity_id}>
+          <div><strong>{entry.item_title}</strong><small>{entry.list_slug === 'marlene' ? 'Wunschliste Marlene' : 'Wunschliste Janus'} · Beteiligung</small></div>
           <div className="gift-activity-amount">{money(entry.amount_cents)}</div>
+          <button className="text-action text-danger" onClick={() => onDelete(entry)}>Betrag löschen</button>
         </article>
       ))}
     </section>
@@ -191,6 +219,7 @@ function AdminDashboard() {
   const [listSlug, setListSlug] = useState<WishListSlug>('janus')
   const [items, setItems] = useState<AdminWishItem[]>([])
   const [activity, setActivity] = useState<GiftActivity[]>([])
+  const [contributions, setContributions] = useState<AdminContribution[]>([])
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState(false)
   const [loginCooldown, setLoginCooldown] = useState(0)
@@ -214,20 +243,28 @@ function AdminDashboard() {
       if (!roles.can_edit && !roles.can_view_givers) {
         setItems([])
         setActivity([])
+        setContributions([])
         setFormError('Dieses Konto hat keine Berechtigung für den Wunschlisten-Admin.')
         await requireSupabase().auth.signOut()
         return
       }
       if (roles.can_edit) setItems(await getAdminItems(listSlug))
       else setItems([])
-      if (roles.can_view_givers) setActivity(await getGiftActivity())
-      else setActivity([])
+      if (roles.can_view_givers) {
+        setActivity(await getGiftActivity())
+        setContributions([])
+      } else {
+        setActivity([])
+        if (roles.can_edit) setContributions(await getAdminContributions(listSlug))
+        else setContributions([])
+      }
       setFormError('')
     } catch (reason) {
       const problem = reason instanceof Error ? reason.message : 'Admin-Daten konnten nicht geladen werden.'
       setFormError(problem)
       setItems([])
       setActivity([])
+      setContributions([])
       if (/autorisiert/i.test(problem)) await requireSupabase().auth.signOut()
     } finally {
       setLoading(false)
@@ -252,6 +289,7 @@ function AdminDashboard() {
     else {
       setItems([])
       setActivity([])
+      setContributions([])
       setCapabilities(null)
       setLoading(false)
     }
@@ -332,6 +370,7 @@ function AdminDashboard() {
     await requireSupabase().auth.signOut()
     setItems([])
     setActivity([])
+    setContributions([])
     setCapabilities(null)
     setMessage('Du wurdest abgemeldet.')
   }
@@ -356,6 +395,22 @@ function AdminDashboard() {
       await refresh()
     } catch (reason) {
       setFormError(reason instanceof Error ? reason.message : 'Der Artikel konnte nicht gelöscht werden.')
+    }
+  }
+
+  async function handleDeleteContribution(entry: { activity_id: string; item_title: string; amount_cents: number }) {
+    if (!window.confirm(`Teilbetrag von ${money(entry.amount_cents)} für „${entry.item_title}“ wirklich löschen?`)) return
+    try {
+      const deleted = await deleteContribution(entry.activity_id)
+      if (!deleted) {
+        setMessage('Dieser Teilbetrag war nicht mehr vorhanden.')
+        await refresh()
+        return
+      }
+      setMessage('Teilbetrag gelöscht. Der offene Restbetrag wurde aktualisiert.')
+      await refresh()
+    } catch (reason) {
+      setFormError(reason instanceof Error ? reason.message : 'Der Teilbetrag konnte nicht gelöscht werden.')
     }
   }
 
@@ -461,8 +516,8 @@ function AdminDashboard() {
                   {items.length === 0 && <div className="empty-state">Auf dieser Wunschliste stehen noch keine Artikel.</div>}
                 </div>
               </>}
-              {canViewGivers && <GiftActivityList activity={activity} />}
-              {canEdit && !canViewGivers && <p className="admin-status-note">Schenker-Namen, E-Mail-Adressen und einzelne Teilbeträge sind für dieses Konto gesperrt und nur für Papas freigeschaltetes Konto sichtbar.</p>}
+              {canViewGivers && <GiftActivityList activity={activity} canDeleteContributions={canEdit} onDeleteContribution={handleDeleteContribution} />}
+              {canEdit && !canViewGivers && <AdminContributionList contributions={contributions} onDelete={handleDeleteContribution} />}
               {!canEdit && !canViewGivers && <div className="empty-state">Dieses Konto ist nicht für den Admin-Bereich freigeschaltet.</div>}
             </>
           )}

@@ -278,6 +278,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .gift-activity-row strong { display: block; margin-bottom: 4px; color: #36556c; }
 .gift-activity-row small { color: #8297a7; }
 .gift-activity-amount { color: #345e7c; font-weight: 700; text-align: right; }
+.gift-activity-controls { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.gift-activity-controls .text-action, .admin-contribution-row .text-action { white-space: nowrap; }
 .empty-state { padding: 24px; border: 1px solid #dce7ef; border-radius: 10px; background: #fff; color: #758a9b; font-size: 12px; text-align: center; }
 .product-upload { display: grid; gap: 8px; margin-top: 17px; color: #45637a; font-size: 11px; font-weight: 600; }
 .product-upload input { min-height: 42px; padding: 9px; border: 1px solid #d7e4ed; border-radius: 8px; background: #fff; color: #60798d; font: inherit; }
