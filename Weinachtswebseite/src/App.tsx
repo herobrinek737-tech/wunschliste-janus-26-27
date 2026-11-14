@@ -281,7 +281,7 @@ function App() {
   }, [listSlug, isAdminRoute])
 
   useEffect(() => {
-    document.title = isAdminRoute ? 'Admin · Wunschlisten' : title
+    if (!isAdminRoute) document.title = title
   }, [isAdminRoute, title])
 
   useEffect(() => {

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { bulkDelete, getListSeason, saveListSeason } from '../lib/api'
+import { useState } from 'react'
+import { bulkDelete, saveListSeason } from '../lib/api'
 import { bulkDeleteReturn, clearBulkDeleteReturn, rememberBulkDelete } from '../lib/bulk-delete-return'
 import { errorMessage } from '../lib/input'
 import { bulkDeleteEmail, listNames, seasons } from '../lib/seasons'
@@ -7,27 +7,19 @@ import type { Season } from '../lib/seasons'
 import type { WishListSlug } from '../lib/types'
 import Modal from './Modal'
 
-export default function WishlistSettings({ list, itemCount, email, onDeleted }: {
+export default function WishlistSettings({ list, itemCount, email, season, seasonLoadError, onSeasonSaved, onDeleted }: {
   list: WishListSlug
   itemCount: number
   email: string
+  season?: Season
+  seasonLoadError: boolean
+  onSeasonSaved: (season: Season) => void
   onDeleted: (count: number) => void
 }) {
-  const [season, setSeason] = useState<Season | null>(null)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [seasonError, setSeasonError] = useState('')
   const [deleteOpen, setDeleteOpen] = useState(bulkDeleteReturn?.list === list && email.toLowerCase() === bulkDeleteEmail)
-
-  useEffect(() => {
-    let active = true
-    getListSeason(list).then((value) => {
-      if (active) setSeason(value)
-    }).catch(() => {
-      if (active) setSeasonError('Die Jahreszeit konnte nicht geladen werden.')
-    })
-    return () => { active = false }
-  }, [list])
 
   async function changeSeason(value: Season) {
     setSaving(true)
@@ -35,7 +27,7 @@ export default function WishlistSettings({ list, itemCount, email, onDeleted }: 
     setSeasonError('')
     try {
       await saveListSeason(list, value)
-      setSeason(value)
+      onSeasonSaved(value)
       setFeedback('Jahreszeit gespeichert.')
     } catch {
       setSeasonError('Die Jahreszeit konnte nicht gespeichert werden.')
@@ -55,6 +47,7 @@ export default function WishlistSettings({ list, itemCount, email, onDeleted }: 
         </select>
         {feedback && <small role="status">{feedback}</small>}
         {seasonError && <small role="alert">{seasonError}</small>}
+        {seasonLoadError && <small role="alert">Die Jahreszeit konnte nicht geladen werden.</small>}
       </div>
       {email.toLowerCase() === bulkDeleteEmail && <button className="outline-button bulk-delete-button"
         type="button" disabled={itemCount === 0} onClick={() => setDeleteOpen(true)}>Alle Produkte löschen</button>}

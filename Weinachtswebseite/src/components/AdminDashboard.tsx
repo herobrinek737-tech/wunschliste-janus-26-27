@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
 import {
@@ -9,6 +9,7 @@ import {
   getAdminContributions,
   getAdminItems,
   getGiftActivity,
+  getListSeason,
   resetItem,
   removeUnlinkedProductImage,
   saveItem,
@@ -20,6 +21,10 @@ import { errorMessage, euroToCents, isPublicShopUrl } from '../lib/input'
 import type { AdminCapabilities, AdminContribution, AdminWishItem, GiftActivity, WishListSlug } from '../lib/types'
 import Modal from './Modal'
 import WishlistSettings from './WishlistSettings'
+import { seasons, wishlistTitle } from '../lib/seasons'
+import type { Season } from '../lib/seasons'
+
+const marleneAdminId = '30193153-16d6-4e8c-afdc-6b0745a9fd38'
 
 function money(cents: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
@@ -246,8 +251,14 @@ function AdminDashboard() {
   const loginEmailInput = useRef<HTMLInputElement>(null)
   const [passwordFormOpen, setPasswordFormOpen] = useState(false)
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null)
+  const [signedInId, setSignedInId] = useState<string | null>(null)
   const [capabilities, setCapabilities] = useState<AdminCapabilities | null>(null)
   const [listSlug, setListSlug] = useState<WishListSlug>(() => new URLSearchParams(window.location.search).get('list') === 'marlene' ? 'marlene' : 'janus')
+  const [seasonByList, setSeasonByList] = useState<Partial<Record<WishListSlug, Season>>>({})
+  const [seasonLoadError, setSeasonLoadError] = useState<WishListSlug | null>(null)
+  const season = seasonByList[listSlug]
+  const theme = season && signedInId && signedInId !== marleneAdminId ? seasons[season] : null
+  const browserTitle = theme && season ? `Admin · ${wishlistTitle(season, listSlug)}` : 'Admin · Wunschlisten'
   const [items, setItems] = useState<AdminWishItem[]>([])
   const [activity, setActivity] = useState<GiftActivity[]>([])
   const [contributions, setContributions] = useState<AdminContribution[]>([])
@@ -321,10 +332,12 @@ function AdminDashboard() {
       if (!active) return
       if (error) setFormError('Die Anmeldung konnte nicht geprüft werden.')
       setSignedInEmail(data.session?.user.email ?? null)
+      setSignedInId(data.session?.user.id ?? null)
       setCheckingSession(false)
     })
     const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
       setSignedInEmail(session?.user.email ?? null)
+      setSignedInId(session?.user.id ?? null)
     })
     return () => {
       active = false
@@ -342,6 +355,22 @@ function AdminDashboard() {
       setLoading(false)
     }
   }, [signedInEmail, listSlug])
+
+  useEffect(() => {
+    document.title = browserTitle
+  }, [browserTitle])
+
+  useEffect(() => {
+    if (!signedInId) return
+    let active = true
+    setSeasonLoadError(null)
+    getListSeason(listSlug).then((value) => {
+      if (active) setSeasonByList((current) => ({ ...current, [listSlug]: value }))
+    }).catch(() => {
+      if (active) setSeasonLoadError(listSlug)
+    })
+    return () => { active = false }
+  }, [signedInId, listSlug])
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -522,7 +551,8 @@ function AdminDashboard() {
   const canViewGivers = capabilities?.can_view_givers ?? false
 
   return (
-    <main className="site-shell admin-shell">
+    <main className={`site-shell admin-shell${theme ? ` seasonal-admin season-${season}` : ''}`}
+      style={theme ? { '--season-ink': theme.ink, '--season-accent': theme.accent, '--season-paper': theme.paper } as CSSProperties : undefined}>
       <header className="topbar">
         <a className="brand" href={publicListHref(listSlug)} aria-label="Zur öffentlichen Wunschliste">
           <span className="brand-mark">{listSlug === 'marlene' ? 'M' : 'J'}</span><span>{listSlug === 'marlene' ? 'MARLENE' : 'JANUS'} <i>·</i> 26/27</span>
@@ -531,8 +561,8 @@ function AdminDashboard() {
       </header>
 
       <section className="admin-intro">
-        <p className="eyebrow">Privater Bereich</p>
-        <h1>Wunschliste <em>verwalten.</em></h1>
+        <p className="eyebrow">Privater Bereich{theme && ` · ${theme.label}`}</p>
+        <h1>{theme?.title ?? 'Wunschliste'} <em>verwalten.</em></h1>
         <p>Artikel pflegen und Reservierungen schützen die Überraschung.</p>
       </section>
 
@@ -589,6 +619,8 @@ function AdminDashboard() {
                   ))}
                 </div>
                 <WishlistSettings key={listSlug} list={listSlug} itemCount={items.length} email={signedInEmail}
+                  season={season} seasonLoadError={seasonLoadError === listSlug}
+                  onSeasonSaved={(value) => setSeasonByList((current) => ({ ...current, [listSlug]: value }))}
                   onDeleted={(count) => {
                     setMessage(count === 1 ? '1 Produkt wurde gelöscht.' : `${count} Produkte wurden gelöscht.`)
                     void refresh()

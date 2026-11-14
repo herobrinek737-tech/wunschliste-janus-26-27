@@ -643,7 +643,7 @@ body:has(dialog:modal)::before, body:has(dialog:modal)::after { animation: none;
   .sort-controls { flex-wrap: wrap; }
 }
 
-.public-wishlist {
+.public-wishlist, .seasonal-admin {
   --pine: var(--season-ink);
   --forest: var(--season-accent);
   --paper: var(--season-paper);
@@ -651,7 +651,7 @@ body:has(dialog:modal)::before, body:has(dialog:modal)::after { animation: none;
 .public-wishlist .intro { grid-template-columns: minmax(0, 1fr) minmax(0, .72fr); }
 .public-wishlist .intro h1 { font-size: clamp(29px, 4.65vw, 59px); overflow-wrap: anywhere; }
 .public-wishlist .intro h1 em { color: var(--season-accent); }
-.public-wishlist:not(.season-winter)::before {
+.public-wishlist:not(.season-winter)::before, .seasonal-admin::before {
   content: '';
   position: fixed;
   inset: 0;
@@ -660,7 +660,23 @@ body:has(dialog:modal)::before, body:has(dialog:modal)::after { animation: none;
   background: radial-gradient(ellipse at 50% 0%, #fff, var(--season-paper) 80%);
 }
 body:has(.public-wishlist:not(.season-winter))::before,
-body:has(.public-wishlist:not(.season-winter))::after { display: none; }
+body:has(.public-wishlist:not(.season-winter))::after,
+body:has(.seasonal-admin:not(.season-winter))::before,
+body:has(.seasonal-admin:not(.season-winter))::after { display: none; }
+.seasonal-admin .admin-intro h1 { font-size: clamp(30px, 5vw, 64px); hyphens: auto; overflow-wrap: anywhere; }
+.seasonal-admin .admin-intro h1 em,
+.seasonal-admin .admin-intro .eyebrow,
+.seasonal-admin .back-link,
+.seasonal-admin .outline-button:not(.bulk-delete-button) { color: var(--season-accent); }
+.seasonal-admin .brand-mark,
+.seasonal-admin .gift-button { background: var(--season-accent); border-color: var(--season-accent); }
+.seasonal-admin .outline-button:not(.bulk-delete-button) {
+  border-color: color-mix(in srgb, var(--season-accent) 42%, white);
+}
+.seasonal-admin .admin-list-tabs [aria-pressed="true"] {
+  background: var(--season-paper);
+  border-color: var(--season-accent);
+}
 .season-art {
   display: grid;
   min-height: 232px;
