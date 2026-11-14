@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
 import { bulkDelete, getListSeason, saveListSeason } from '../lib/api'
+import { bulkDeleteReturn, clearBulkDeleteReturn, rememberBulkDelete } from '../lib/bulk-delete-return'
 import { errorMessage } from '../lib/input'
 import { bulkDeleteEmail, listNames, seasons } from '../lib/seasons'
 import type { Season } from '../lib/seasons'
@@ -17,7 +17,7 @@ export default function WishlistSettings({ list, itemCount, email, onDeleted }: 
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [seasonError, setSeasonError] = useState('')
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(bulkDeleteReturn?.list === list && email.toLowerCase() === bulkDeleteEmail)
 
   useEffect(() => {
     let active = true
@@ -58,7 +58,10 @@ export default function WishlistSettings({ list, itemCount, email, onDeleted }: 
       </div>
       {email.toLowerCase() === bulkDeleteEmail && <button className="outline-button bulk-delete-button"
         type="button" disabled={itemCount === 0} onClick={() => setDeleteOpen(true)}>Alle Produkte löschen</button>}
-      {deleteOpen && <BulkDeleteDialog list={list} onClose={() => setDeleteOpen(false)} onDeleted={onDeleted} />}
+      {deleteOpen && <BulkDeleteDialog list={list} onClose={() => {
+        if (bulkDeleteReturn) clearBulkDeleteReturn()
+        setDeleteOpen(false)
+      }} onDeleted={onDeleted} />}
     </div>
   )
 }
@@ -69,30 +72,47 @@ function BulkDeleteDialog({ list, onClose, onDeleted }: {
   onDeleted: (count: number) => void
 }) {
   const [sent, setSent] = useState(false)
-  const [code, setCode] = useState('')
+  const confirmation = bulkDeleteReturn?.list === list ? bulkDeleteReturn : null
+  const [proof, setProof] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
 
-  async function sendCode() {
+  async function sendLink() {
     setPending(true)
     setError('')
     try {
-      await bulkDelete(list)
+      const result = await bulkDelete(list, { action: 'send-link' })
+      if (!result?.state) throw new Error('Die Bestätigung konnte nicht gestartet werden.')
+      rememberBulkDelete(list, result.state)
       setSent(true)
-      setCode('')
     } catch (reason) {
-      setError(errorMessage(reason, 'Der Löschcode konnte nicht gesendet werden.'))
+      setError(errorMessage(reason, 'Der Bestätigungslink konnte nicht gesendet werden.'))
     } finally {
       setPending(false)
     }
   }
 
-  async function confirm(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function verifyLink() {
+    if (!confirmation) return
     setPending(true)
     setError('')
     try {
-      const count = await bulkDelete(list, code.trim())
+      const result = await bulkDelete(list, { action: 'verify-link', state: confirmation.state, code: confirmation.code })
+      if (!result?.proof) throw new Error('Die E-Mail konnte nicht bestätigt werden.')
+      setProof(result.proof)
+    } catch (reason) {
+      setError(errorMessage(reason, 'Die E-Mail konnte nicht bestätigt werden.'))
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function confirm() {
+    if (!confirmation || !proof) return
+    setPending(true)
+    setError('')
+    try {
+      const count = (await bulkDelete(list, { action: 'delete-confirmed', state: confirmation.state, proof }))?.count
       if (count === undefined) throw new Error('Die Löschung konnte nicht bestätigt werden.')
       onClose()
       onDeleted(count)
@@ -107,20 +127,22 @@ function BulkDeleteDialog({ list, onClose, onDeleted }: {
     <Modal titleId="bulk-delete-title" busy={pending} onClose={onClose}>
       <h2 id="bulk-delete-title">Alle Produkte löschen</h2>
       <p>Damit löschst du alle Produkte und Notizen auf der Wunschliste von {listNames[list]} endgültig.</p>
-      {sent ? (
-        <form onSubmit={confirm}>
-          <p>Der Code wurde an {bulkDeleteEmail} gesendet und gilt zehn Minuten.</p>
-          <label htmlFor="bulk-delete-code">Sechsstelliger E-Mail-Code</label>
-          <input id="bulk-delete-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}"
-            value={code} onChange={(event) => setCode(event.target.value)} maxLength={6} required />
-          <button className="outline-button bulk-delete-button" disabled={pending}>Endgültig löschen</button>
-          <button className="quiet-button" type="button" disabled={pending} onClick={sendCode}>Neuen Code senden</button>
-        </form>
+      {confirmation ? (
+        proof ? <>
+          <p role="status">E-Mail bestätigt.</p>
+          <button className="outline-button bulk-delete-button" type="button" disabled={pending} onClick={confirm}>Endgültig löschen</button>
+        </> :
+          <button className="outline-button" type="button" disabled={pending} onClick={verifyLink}>E-Mail bestätigen</button>
+      ) : sent ? (
+        <>
+          <p role="status">Der Link wurde an {bulkDeleteEmail} gesendet. Öffne ihn innerhalb von zehn Minuten im selben Browser.</p>
+          <button className="quiet-button" type="button" disabled={pending} onClick={sendLink}>Neuen Link senden</button>
+        </>
       ) : (
         <>
-          <p>Die Löschung erfordert eine Anmeldung mit Admin-Passwort und einen Code per E-Mail an {bulkDeleteEmail}.</p>
-          <button className="outline-button" type="button" disabled={pending} onClick={sendCode}>
-            {pending ? 'Code wird gesendet …' : 'Code per E-Mail senden'}
+          <p>Die Löschung erfordert eine Anmeldung mit Admin-Passwort und einen Bestätigungslink per E-Mail an {bulkDeleteEmail}.</p>
+          <button className="outline-button" type="button" disabled={pending} onClick={sendLink}>
+            {pending ? 'Link wird gesendet …' : 'Link per E-Mail senden'}
           </button>
         </>
       )}

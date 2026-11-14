@@ -79,16 +79,13 @@ Spiele die Migrationen in `supabase/migrations/` vor der Veröffentlichung ein. 
 - **Als PDF speichern** öffnet den Druckdialog mit einem A4-Layout für die angezeigte Wunschliste. Wähle dort **Als PDF speichern**. Titel, Farbpalette und Symbol folgen der Jahreszeit der jeweiligen Liste.
 - Im Admin-Bereich kannst du die Jahreszeit pro Liste auswählen. Öffentliche Produktnotizen werden im Artikel-Editor gepflegt und erscheinen auf der Seite und im PDF.
 
-## Sammellöschung mit E-Mail-Code
+## Sammellöschung mit E-Mail-Bestätigung
 
-**Alle Produkte löschen** gilt für die aktuell ausgewählte Liste. Die Funktion verlangt eine Anmeldung mit dem Admin-Passwort und einen einmaligen, zehn Minuten gültigen Bestätigungscode an `janus.kleine@cbg-duelmen.de`. Bei Reservierungen oder zugesagten Teilbeträgen bricht sie ab, bis diese geklärt sind.
+**Alle Produkte löschen** gilt für die aktuell ausgewählte Liste. Melde dich mit dem Admin-Passwort an, fordere den Link an und öffne ihn innerhalb von zehn Minuten im selben Browser. Nach **E-Mail bestätigen** kannst du die Löschung ausdrücklich auslösen. Bei Reservierungen oder zugesagten Teilbeträgen bricht sie ab, bis diese geklärt sind.
 
-Für den Versand braucht die Supabase Edge Function `wish-bulk-delete` zwei serverseitige Secrets unter **Edge Functions → Secrets**.
+Supabase Auth sendet den Einmal-Link an `janus.kleine@cbg-duelmen.de`. Der Standardversand von Supabase ist auf Teamadressen beschränkt und unterliegt einem niedrigen Versandlimit. Die Edge Function bindet die Bestätigung per PKCE an die ursprüngliche Passwort-Sitzung und die ausgewählte Liste.
 
-- `RESEND_API_KEY` enthält den Resend-API-Schlüssel für den Mailversand.
-- `WISH_BULK_DELETE_FROM` enthält den Absender einer in Resend verifizierten Domain, zum Beispiel `Wunschlisten <wunschliste@deine-domain.de>`.
-
-Für andere Supabase-Projekte spiele zuerst die Migration ein und deploye dann `supabase functions deploy wish-bulk-delete --project-ref <Projekt-Ref>`. Die Funktion prüft die Anmeldung und Listenberechtigung serverseitig. Lege die Secrets ausschließlich in Supabase ab.
+Für andere Installationen passe `callbackUrl` in der Edge Function an, hinterlege die Adresse unter **Authentication → URL Configuration** und deploye die Funktion nach der Datenbankmigration.
 
 ## Projektstruktur
 

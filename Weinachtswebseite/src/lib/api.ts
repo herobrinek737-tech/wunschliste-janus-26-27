@@ -116,16 +116,20 @@ export async function saveListSeason(listSlug: WishListSlug, season: Season) {
   if (error) throw error
 }
 
-export async function bulkDelete(listSlug: WishListSlug, code?: string) {
-  const { data, error } = await requireSupabase().functions.invoke<{ count?: number }>('wish-bulk-delete', {
-    body: { listSlug, action: code === undefined ? 'send' : 'confirm', code },
+export async function bulkDelete(listSlug: WishListSlug, request:
+  | { action: 'send-link' }
+  | { action: 'verify-link'; state: string; code: string }
+  | { action: 'delete-confirmed'; state: string; proof: string }
+) {
+  const { data, error } = await requireSupabase().functions.invoke<{ count?: number; state?: string; proof?: string }>('wish-bulk-delete', {
+    body: { listSlug, ...request },
   })
   if (error instanceof FunctionsHttpError) {
     const response = await error.context.json().catch(() => null)
     throw new Error(response?.message ?? 'Die Löschfunktion ist derzeit nicht verfügbar.')
   }
   if (error) throw error
-  return data?.count
+  return data
 }
 
 export async function deleteItem(itemId: string, listSlug: WishListSlug) {

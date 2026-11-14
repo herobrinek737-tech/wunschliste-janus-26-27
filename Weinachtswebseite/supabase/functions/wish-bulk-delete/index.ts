@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.119.0'
 
 const recipient = 'janus.kleine@cbg-duelmen.de'
+const callbackUrl = 'https://herobrinek737-tech.github.io/wunschliste-janus-26-27/'
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, apikey, x-client-info, content-type',
@@ -20,12 +21,9 @@ async function hashCode(secret: string, scope: string, code: string) {
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-function generateCode() {
-  const random = new Uint32Array(1)
-  do {
-    crypto.getRandomValues(random)
-  } while (random[0] >= 4_294_000_000)
-  return String(random[0] % 1_000_000).padStart(6, '0')
+async function pkceChallenge(verifier: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+  return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
 Deno.serve(async (request) => {
@@ -39,7 +37,7 @@ Deno.serve(async (request) => {
     const body = await request.json().catch(() => null)
     const slug = body?.listSlug
     const action = body?.action
-    if ((slug !== 'janus' && slug !== 'marlene') || (action !== 'send' && action !== 'confirm')) {
+    if ((slug !== 'janus' && slug !== 'marlene') || !['send-link', 'verify-link', 'delete-confirmed'].includes(action)) {
       return reply({ message: 'Ungültige Anfrage.' }, 400)
     }
 
@@ -67,49 +65,75 @@ Deno.serve(async (request) => {
     const scope = [user.id, claims.session_id, slug].join(':')
     const service = createClient(url, serviceKey, { auth })
 
-    if (action === 'send') {
-      const mailKey = Deno.env.get('RESEND_API_KEY')
-      const sender = Deno.env.get('WISH_BULK_DELETE_FROM')
-      if (!mailKey || !sender) return reply({ message: 'Der E-Mail-Versand für die Löschfunktion ist noch nicht eingerichtet.' }, 503)
+    const authHeaders = { apikey: publicKey, 'Content-Type': 'application/json' }
+    const state = action === 'send-link' ? crypto.randomUUID() : body.state
+    if (typeof state !== 'string' || !/^[a-f0-9-]{36}$/.test(state)) {
+      return reply({ message: 'Starte die Bestätigung im selben Browser erneut.' }, 400)
+    }
+    const verifier = await hashCode(serviceKey, scope, 'pkce:' + state)
+    const challengeHash = await hashCode(serviceKey, scope, 'challenge:' + state)
 
-      const code = generateCode()
-      const challenge = await service.rpc('start_wish_bulk_delete', {
-        ...params,
-        p_code_hash: await hashCode(serviceKey, scope, code),
-      })
+    if (action === 'send-link') {
+      const challenge = await service.rpc('start_wish_bulk_delete', { ...params, p_code_hash: challengeHash })
       if (challenge.error) throw challenge.error
-      if (!challenge.data) return reply({ message: 'Bitte warte 60 Sekunden zwischen zwei Code-Anfragen.' }, 429)
-
-      const listName = slug === 'janus' ? 'Janus' : 'Marlene'
-      const mail = await fetch('https://api.resend.com/emails', {
+      if (!challenge.data) return reply({ message: 'Bitte warte 60 Sekunden zwischen zwei Anfragen.' }, 429)
+      const otpUrl = new URL('/auth/v1/otp', url)
+      otpUrl.searchParams.set('redirect_to', callbackUrl)
+      const mail = await fetch(otpUrl, {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + mailKey, 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
-          from: sender,
-          to: [recipient],
-          subject: 'Bestätigung zum Löschen der Wunschliste von ' + listName,
-          text: 'Dein Bestätigungscode lautet ' + code + '. Er ist zehn Minuten gültig und bestätigt, dass alle Produkte auf der Wunschliste von ' + listName + ' gelöscht werden sollen. Wenn du das nicht angefordert hast, ignoriere diese E-Mail.',
+          email: recipient,
+          create_user: false,
+          code_challenge: await pkceChallenge(verifier),
+          code_challenge_method: 's256',
         }),
       })
-      if (!mail.ok) {
-        console.error('Mail provider returned status', mail.status)
-        return reply({ message: 'Der Code konnte nicht gesendet werden. Bitte versuche es in einer Minute erneut.' }, 502)
+      if (mail.status === 429) {
+        return reply({ message: 'Das E-Mail-Limit ist erreicht. Versuche es später erneut.' }, 429)
       }
-      return reply({ sent: true })
+      if (!mail.ok) {
+        console.error('Supabase Auth email status', mail.status)
+        return reply({ message: 'Der Bestätigungslink konnte nicht gesendet werden.' }, 502)
+      }
+      return reply({ state })
     }
 
-    if (typeof body.code !== 'string' || !/^\d{6}$/.test(body.code)) {
-      return reply({ message: 'Bitte gib den sechsstelligen Code ein.' }, 400)
+    const proof = await hashCode(serviceKey, scope, 'approved:' + state)
+    if (action === 'verify-link') {
+      if (typeof body.code !== 'string' || !/^[a-f0-9-]{36}$/i.test(body.code)) {
+        return reply({ message: 'Der Bestätigungslink ist ungültig.' }, 400)
+      }
+      const pending = await service.from('wish_bulk_delete_challenges').select('sent_at')
+        .eq('user_id', user.id).eq('session_id', claims.session_id).eq('list_slug', slug)
+        .eq('code_hash', challengeHash).eq('consumed', false)
+        .gt('sent_at', new Date(Date.now() - 600_000).toISOString()).maybeSingle()
+      if (pending.error) throw pending.error
+      if (!pending.data) return reply({ message: 'Der Link ist abgelaufen. Fordere einen neuen an.' }, 409)
+      const exchange = await fetch(new URL('/auth/v1/token?grant_type=pkce', url), {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ auth_code: body.code, code_verifier: verifier }),
+      })
+      const verified = exchange.ok ? await exchange.json() : null
+      if (verified?.user?.id !== user.id || verified.user.email?.toLowerCase() !== recipient) {
+        return reply({ message: 'Der Link ist abgelaufen, wurde bereits verwendet oder gehört zu einer anderen Anmeldung.' }, 400)
+      }
+      // The extra Auth session proves mailbox access. The original password session remains in use.
+      await fetch(new URL('/auth/v1/logout?scope=local', url), {
+        method: 'POST',
+        headers: { ...authHeaders, Authorization: 'Bearer ' + verified.access_token },
+      }).catch(() => {})
+      return reply({ proof })
     }
-    const result = await service.rpc('finish_wish_bulk_delete', {
-      ...params,
-      p_code_hash: await hashCode(serviceKey, scope, body.code),
-    })
+
+    if (body.proof !== proof) return reply({ message: 'Bestätige zuerst den Link aus der E-Mail.' }, 403)
+    const result = await service.rpc('finish_wish_bulk_delete', { ...params, p_code_hash: challengeHash })
     if (result.error) throw result.error
     switch (result.data?.status) {
       case 'deleted': return reply({ count: result.data.count })
-      case 'invalid': return reply({ message: 'Der Code ist falsch.' }, 400)
-      case 'expired': return reply({ message: 'Der Code ist abgelaufen, verbraucht oder gesperrt. Fordere einen neuen an.' }, 409)
+      case 'invalid':
+      case 'expired': return reply({ message: 'Die Bestätigung ist abgelaufen oder verbraucht. Fordere einen neuen Link an.' }, 409)
       case 'protected': return reply({ message: 'Kläre zuerst offene Reservierungen und zugesagte Teilbeträge in dieser Wunschliste.' }, 409)
       default: throw new Error('Unexpected bulk delete result')
     }
