@@ -8,9 +8,10 @@ export const seasons = {
 } as const
 
 export type Season = keyof typeof seasons
+export type WishlistSettings = { season: Season; custom_title: string | null }
 export const listNames = { janus: 'Janus', marlene: 'Marlene' } as const
 export const bulkDeleteEmail = 'janus.kleine@cbg-duelmen.de'
 
-export function wishlistTitle(season: Season, list: WishListSlug) {
-  return `${seasons[season].title} von ${listNames[list]}`
+export function wishlistTitle(settings: WishlistSettings, list: WishListSlug) {
+  return `${settings.custom_title ?? seasons[settings.season].title} von ${listNames[list]}`
 }

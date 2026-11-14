@@ -702,9 +702,13 @@ body:has(.seasonal-admin:not(.season-winter))::after { display: none; }
   gap: 12px 24px;
   padding: 16px 0;
 }
-.wishlist-settings > div { display: grid; gap: 6px; }
+.wishlist-settings > div, .wishlist-title-form { display: grid; gap: 6px; }
+.wishlist-title-form { flex: 1 1 320px; min-width: 0; }
+.wishlist-title-form > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.wishlist-title-form input { flex: 1 1 200px; min-width: 0; }
+.wishlist-settings-message { flex-basis: 100%; }
 .wishlist-settings label { font-weight: 600; font-size: .875rem; }
-.wishlist-settings select, .editor-modal textarea {
+.wishlist-settings select, .wishlist-title-form input, .editor-modal textarea {
   font: inherit;
   color: var(--ink);
   background: white;
@@ -768,6 +772,7 @@ body:has(.seasonal-admin:not(.season-winter))::after { display: none; }
   .wishlist-print-header h1 {
     font: 500 25pt/1.17 var(--serif);
     margin: 3mm 0 0;
+    overflow-wrap: anywhere;
   }
   .wishlist-print-header div { position: absolute; top: 7mm; right: 7mm; color: var(--print-accent); font-size: 23pt; }
   .wishlist-print-products { margin: 0; padding: 0; list-style: none; }

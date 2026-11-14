@@ -1,36 +1,39 @@
 import { useState } from 'react'
-import { bulkDelete, saveListSeason } from '../lib/api'
+import { bulkDelete, saveListSettings } from '../lib/api'
 import { bulkDeleteReturn, clearBulkDeleteReturn, rememberBulkDelete } from '../lib/bulk-delete-return'
 import { errorMessage } from '../lib/input'
 import { bulkDeleteEmail, listNames, seasons } from '../lib/seasons'
-import type { Season } from '../lib/seasons'
+import type { Season, WishlistSettings as ListSettings } from '../lib/seasons'
 import type { WishListSlug } from '../lib/types'
 import Modal from './Modal'
 
-export default function WishlistSettings({ list, itemCount, email, season, seasonLoadError, onSeasonSaved, onDeleted }: {
+export default function WishlistSettings({ list, itemCount, email, settings, settingsLoadError, onSettingsSaved, onDeleted }: {
   list: WishListSlug
   itemCount: number
   email: string
-  season?: Season
-  seasonLoadError: boolean
-  onSeasonSaved: (season: Season) => void
+  settings?: ListSettings
+  settingsLoadError: boolean
+  onSettingsSaved: (settings: ListSettings) => void
   onDeleted: (count: number) => void
 }) {
   const [saving, setSaving] = useState(false)
+  const [titleDraft, setTitleDraft] = useState<string | null>(null)
   const [feedback, setFeedback] = useState('')
-  const [seasonError, setSeasonError] = useState('')
+  const [saveError, setSaveError] = useState('')
   const [deleteOpen, setDeleteOpen] = useState(bulkDeleteReturn?.list === list && email.toLowerCase() === bulkDeleteEmail)
+  const customTitle = titleDraft ?? settings?.custom_title ?? ''
 
-  async function changeSeason(value: Season) {
+  async function saveSettings(changes: Partial<ListSettings>, label: string) {
     setSaving(true)
     setFeedback('')
-    setSeasonError('')
+    setSaveError('')
     try {
-      await saveListSeason(list, value)
-      onSeasonSaved(value)
-      setFeedback('Jahreszeit gespeichert.')
+      const updated = await saveListSettings(list, changes)
+      onSettingsSaved(updated)
+      if ('custom_title' in changes) setTitleDraft(null)
+      setFeedback(`${label} gespeichert.`)
     } catch {
-      setSeasonError('Die Jahreszeit konnte nicht gespeichert werden.')
+      setSaveError(`${label} konnte nicht gespeichert werden.`)
     } finally {
       setSaving(false)
     }
@@ -40,17 +43,30 @@ export default function WishlistSettings({ list, itemCount, email, season, seaso
     <div className="wishlist-settings">
       <div>
         <label htmlFor="wishlist-season">Jahreszeit für Seite und PDF</label>
-        <select id="wishlist-season" value={season ?? ''} disabled={!season || saving}
-          onChange={(event) => void changeSeason(event.target.value as Season)}>
+        <select id="wishlist-season" value={settings?.season ?? ''} disabled={!settings || saving}
+          onChange={(event) => void saveSettings({ season: event.target.value as Season }, 'Jahreszeit')}>
           <option value="" disabled>Jahreszeit auswählen</option>
           {(Object.keys(seasons) as Season[]).map((key) => <option key={key} value={key}>{seasons[key].label}</option>)}
         </select>
-        {feedback && <small role="status">{feedback}</small>}
-        {seasonError && <small role="alert">{seasonError}</small>}
-        {seasonLoadError && <small role="alert">Die Jahreszeit konnte nicht geladen werden.</small>}
       </div>
+      <form className="wishlist-title-form" onSubmit={(event) => {
+        event.preventDefault()
+        void saveSettings({ custom_title: customTitle.trim() || null }, 'Titel')
+      }}>
+        <label htmlFor="custom-wishlist-title">Titel der Wunschliste</label>
+        <div>
+          <input id="custom-wishlist-title" type="text" maxLength={100} value={customTitle}
+            disabled={!settings || saving} aria-describedby="custom-wishlist-title-help"
+            placeholder="Geburtstagswunschliste" onChange={(event) => setTitleDraft(event.target.value)} />
+          <button className="outline-button" disabled={!settings || saving || customTitle.trim() === (settings.custom_title ?? '')}>Titel speichern</button>
+        </div>
+        <small id="custom-wishlist-title-help">Leer lassen für den Titel der Jahreszeit. „von {listNames[list]}“ wird ergänzt.</small>
+      </form>
       {email.toLowerCase() === bulkDeleteEmail && <button className="outline-button bulk-delete-button"
         type="button" disabled={itemCount === 0} onClick={() => setDeleteOpen(true)}>Alle Produkte löschen</button>}
+      {feedback && <small className="wishlist-settings-message" role="status">{feedback}</small>}
+      {saveError && <small className="wishlist-settings-message" role="alert">{saveError}</small>}
+      {settingsLoadError && <small className="wishlist-settings-message" role="alert">Die Einstellungen konnten nicht geladen werden.</small>}
       {deleteOpen && <BulkDeleteDialog list={list} onClose={() => {
         if (bulkDeleteReturn) clearBulkDeleteReturn()
         setDeleteOpen(false)

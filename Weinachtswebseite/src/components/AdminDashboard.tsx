@@ -9,7 +9,7 @@ import {
   getAdminContributions,
   getAdminItems,
   getGiftActivity,
-  getListSeason,
+  getListSettings,
   resetItem,
   removeUnlinkedProductImage,
   saveItem,
@@ -22,7 +22,7 @@ import type { AdminCapabilities, AdminContribution, AdminWishItem, GiftActivity,
 import Modal from './Modal'
 import WishlistSettings from './WishlistSettings'
 import { seasons, wishlistTitle } from '../lib/seasons'
-import type { Season } from '../lib/seasons'
+import type { WishlistSettings as ListSettings } from '../lib/seasons'
 
 const marleneAdminId = '30193153-16d6-4e8c-afdc-6b0745a9fd38'
 
@@ -254,11 +254,12 @@ function AdminDashboard() {
   const [signedInId, setSignedInId] = useState<string | null>(null)
   const [capabilities, setCapabilities] = useState<AdminCapabilities | null>(null)
   const [listSlug, setListSlug] = useState<WishListSlug>(() => new URLSearchParams(window.location.search).get('list') === 'marlene' ? 'marlene' : 'janus')
-  const [seasonByList, setSeasonByList] = useState<Partial<Record<WishListSlug, Season>>>({})
-  const [seasonLoadError, setSeasonLoadError] = useState<WishListSlug | null>(null)
-  const season = seasonByList[listSlug]
+  const [settingsByList, setSettingsByList] = useState<Partial<Record<WishListSlug, ListSettings>>>({})
+  const [settingsLoadError, setSettingsLoadError] = useState<WishListSlug | null>(null)
+  const settings = settingsByList[listSlug]
+  const season = settings?.season
   const theme = season && signedInId && signedInId !== marleneAdminId ? seasons[season] : null
-  const browserTitle = theme && season ? `Admin · ${wishlistTitle(season, listSlug)}` : 'Admin · Wunschlisten'
+  const browserTitle = theme && settings ? `Admin · ${wishlistTitle(settings, listSlug)}` : 'Admin · Wunschlisten'
   const [items, setItems] = useState<AdminWishItem[]>([])
   const [activity, setActivity] = useState<GiftActivity[]>([])
   const [contributions, setContributions] = useState<AdminContribution[]>([])
@@ -363,11 +364,11 @@ function AdminDashboard() {
   useEffect(() => {
     if (!signedInId) return
     let active = true
-    setSeasonLoadError(null)
-    getListSeason(listSlug).then((value) => {
-      if (active) setSeasonByList((current) => ({ ...current, [listSlug]: value }))
+    setSettingsLoadError(null)
+    getListSettings(listSlug).then((value) => {
+      if (active) setSettingsByList((current) => ({ ...current, [listSlug]: value }))
     }).catch(() => {
-      if (active) setSeasonLoadError(listSlug)
+      if (active) setSettingsLoadError(listSlug)
     })
     return () => { active = false }
   }, [signedInId, listSlug])
@@ -562,7 +563,7 @@ function AdminDashboard() {
 
       <section className="admin-intro">
         <p className="eyebrow">Privater Bereich{theme && ` · ${theme.label}`}</p>
-        <h1>{theme?.title ?? 'Wunschliste'} <em>verwalten.</em></h1>
+        <h1>{theme ? settings?.custom_title ?? theme.title : 'Wunschliste'} <em>verwalten.</em></h1>
         <p>Artikel pflegen und Reservierungen schützen die Überraschung.</p>
       </section>
 
@@ -619,8 +620,8 @@ function AdminDashboard() {
                   ))}
                 </div>
                 <WishlistSettings key={listSlug} list={listSlug} itemCount={items.length} email={signedInEmail}
-                  season={season} seasonLoadError={seasonLoadError === listSlug}
-                  onSeasonSaved={(value) => setSeasonByList((current) => ({ ...current, [listSlug]: value }))}
+                  settings={settings} settingsLoadError={settingsLoadError === listSlug}
+                  onSettingsSaved={(value) => setSettingsByList((current) => ({ ...current, [listSlug]: value }))}
                   onDeleted={(count) => {
                     setMessage(count === 1 ? '1 Produkt wurde gelöscht.' : `${count} Produkte wurden gelöscht.`)
                     void refresh()

@@ -1,15 +1,16 @@
 import type { CSSProperties } from 'react'
 import { getProductImage, getWishIllustration } from '../lib/product-images'
-import { seasons, wishlistTitle } from '../lib/seasons'
+import { seasons } from '../lib/seasons'
 import type { Season } from '../lib/seasons'
 import type { PublicWishItem, WishListSlug } from '../lib/types'
 
 const euro = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })
 
-export default function WishlistPrint({ items, list, season, shopUrl }: {
+export default function WishlistPrint({ items, list, season, title, shopUrl }: {
   items: PublicWishItem[]
   list: WishListSlug
   season: Season
+  title: string
   shopUrl: (item: PublicWishItem, list: WishListSlug) => string
 }) {
   const theme = seasons[season]
@@ -18,7 +19,7 @@ export default function WishlistPrint({ items, list, season, shopUrl }: {
     <section className="wishlist-print" style={palette}>
       <header className="wishlist-print-header">
         <span>{theme.label} · {items.length} {items.length === 1 ? 'Wunsch' : 'Wünsche'}</span>
-        <h1>{wishlistTitle(season, list)}</h1>
+        <h1>{title}</h1>
         <div aria-hidden="true">{theme.symbol}</div>
       </header>
       {items.length === 0 && <p>Diese Wunschliste ist noch leer.</p>}

@@ -1,6 +1,6 @@
 import { requireSupabase } from './supabase'
 import { FunctionsHttpError } from '@supabase/supabase-js'
-import type { Season } from './seasons'
+import type { WishlistSettings } from './seasons'
 import type { AdminCapabilities, AdminContribution, AdminWishItem, GiftActivity, PublicWishItem, WishListSlug } from './types'
 
 export async function getPublicItems(listSlug: WishListSlug) {
@@ -103,17 +103,20 @@ export async function saveItem(item: {
   return data as string
 }
 
-export async function getListSeason(listSlug: WishListSlug) {
+const listSettingsFields = 'season,custom_title'
+
+export async function getListSettings(listSlug: WishListSlug) {
   const { data, error } = await requireSupabase().from('wish_list_settings')
-    .select('season').eq('list_slug', listSlug).single()
+    .select(listSettingsFields).eq('list_slug', listSlug).single()
   if (error) throw error
-  return data.season as Season
+  return data as WishlistSettings
 }
 
-export async function saveListSeason(listSlug: WishListSlug, season: Season) {
-  const { error } = await requireSupabase().from('wish_list_settings')
-    .update({ season }).eq('list_slug', listSlug).select('season').single()
+export async function saveListSettings(listSlug: WishListSlug, changes: Partial<WishlistSettings>) {
+  const { data, error } = await requireSupabase().from('wish_list_settings')
+    .update(changes).eq('list_slug', listSlug).select(listSettingsFields).single()
   if (error) throw error
+  return data as WishlistSettings
 }
 
 export async function bulkDelete(listSlug: WishListSlug, request:

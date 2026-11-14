@@ -3,9 +3,9 @@ import type { CSSProperties } from 'react'
 import type { FormEvent } from 'react'
 import Modal from './components/Modal'
 import WishlistPrint from './components/WishlistPrint'
-import { contributeItem, getListSeason, getPublicItems, reserveItem } from './lib/api'
+import { contributeItem, getListSettings, getPublicItems, reserveItem } from './lib/api'
 import { listNames, seasons, wishlistTitle } from './lib/seasons'
-import type { Season } from './lib/seasons'
+import type { WishlistSettings } from './lib/seasons'
 import { demoWishItems } from './lib/demo-items'
 import { getProductImage, getWishIllustration } from './lib/product-images'
 import { isSupabaseConfigured } from './lib/supabase'
@@ -183,10 +183,11 @@ function ProductArtwork({ item, index, list, shopUrl }: { item: PublicWishItem; 
 function App() {
   const [isAdminRoute, setIsAdminRoute] = useState(isAdminLocation)
   const [listSlug, setListSlug] = useState<WishListSlug>(getListSlug)
-  const [seasonByList, setSeasonByList] = useState<Record<WishListSlug, Season>>({ janus: 'winter', marlene: 'winter' })
-  const season = seasonByList[listSlug]
+  const [settingsByList, setSettingsByList] = useState<Partial<Record<WishListSlug, WishlistSettings>>>({})
+  const settings: WishlistSettings = settingsByList[listSlug] ?? { season: 'winter', custom_title: null }
+  const season = settings.season
   const theme = seasons[season]
-  const title = wishlistTitle(season, listSlug)
+  const title = wishlistTitle(settings, listSlug)
   const [itemsByList, setItemsByList] = useState<Record<WishListSlug, PublicWishItem[]>>(() => ({ janus: isSupabaseConfigured ? [] : demoWishItems, marlene: [] }))
   const items = itemsByList[listSlug].filter((item) => isPublicShopUrl(item.url))
   const [cartByList, setCartByList] = useState<CartByList>(readCartByList)
@@ -245,10 +246,10 @@ function App() {
     setLoading(true)
     setError('')
     try {
-      const [refreshedItems, refreshedSeason] = await Promise.all([getPublicItems(listSlug), getListSeason(listSlug)])
+      const [refreshedItems, refreshedSettings] = await Promise.all([getPublicItems(listSlug), getListSettings(listSlug)])
       if (request !== listRequest.current) return
       setItemsByList((current) => ({ ...current, [listSlug]: refreshedItems }))
-      setSeasonByList((current) => ({ ...current, [listSlug]: refreshedSeason }))
+      setSettingsByList((current) => ({ ...current, [listSlug]: refreshedSettings }))
     } catch {
       if (request === listRequest.current) setError('Die Wunschliste konnte nicht geladen werden.')
     } finally {
@@ -535,7 +536,7 @@ function App() {
       <section className="intro">
         <div className="intro-copy">
           <p className="eyebrow">{theme.label}</p>
-          <h1>{theme.title}<br /><em>von {listNames[listSlug]}</em></h1>
+          <h1>{settings.custom_title ?? theme.title}<br /><em>von {listNames[listSlug]}</em></h1>
           <p className="intro-text">Hier findest du {listSlug === 'marlene' ? 'Marlenes' : 'meine'} Wünsche für dieses Jahr. Du kannst ein Geschenk reservieren oder einen Teil des Preises übernehmen.</p>
           {!loading && !error && <div className="wish-count"><span className="count-star" aria-hidden="true">✳</span><span><strong>{items.length}</strong> {items.length === 1 ? 'Wunsch' : 'Wünsche'} auf der Liste</span></div>}
         </div>
@@ -602,7 +603,7 @@ function App() {
           </div>
         )}
       </section>
-      {!loading && !error && <WishlistPrint items={items} season={season} list={listSlug} shopUrl={getWishlistShopUrl} />}
+      {!loading && !error && <WishlistPrint items={items} season={season} title={title} list={listSlug} shopUrl={getWishlistShopUrl} />}
 
       <footer className="site-footer">
         <span>Mit Liebe zusammengestellt von {listSlug === 'marlene' ? 'Marlene' : 'Janus'}</span>
