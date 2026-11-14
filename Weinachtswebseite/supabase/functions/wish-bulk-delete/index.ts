@@ -1,10 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.119.0'
+import { corsHeaders } from 'npm:@supabase/supabase-js@2.119.0/cors'
 
 const recipient = 'janus.kleine@cbg-duelmen.de'
 const callbackUrl = 'https://herobrinek737-tech.github.io/wunschliste-janus-26-27/'
 const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, apikey, x-client-info, content-type',
+  ...corsHeaders,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
