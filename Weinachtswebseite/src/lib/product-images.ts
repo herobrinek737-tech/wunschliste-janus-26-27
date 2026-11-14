@@ -17,7 +17,21 @@ const shopImageKeys: Array<[string, string]> = [
 
 const shopImages = shopImageKeys.map(([key, file]) => [new RegExp(key, 'i'), file] as const)
 
-export function getProductImage(shopUrl: string) {
-  const file = shopImages.find(([key]) => key.test(shopUrl))?.[1]
+const marleneImages = [
+  [/\/3565144164-154-6306(?:[/?#]|$)/i, 'reitpoloshirt.webp'],
+  [/\/rucksack-21-l-5gs9z5(?:[/?#]|$)/i, 'nike-rucksack.webp'],
+  [/PPN3050033(?:[/?#]|$)/i, 'air-up-click.webp'],
+  [/[?&]ProductId=341009955(?:[&#]|$)/i, 'rollregal.webp'],
+  [/\/B07M91H7XB(?:[/?#]|$)/i, 'auxmir-aufsteller.webp'],
+  [/\/B0FD34T1NB(?:[/?#]|$)/i, 'schubladen-organizer.webp'],
+  [/\/B0DG4Y9R97(?:[/?#]|$)/i, 'waeschekorb.webp'],
+  [/\/B0DRYWT1WM(?:[/?#]|$)/i, 'nageltips.webp'],
+  [/\/19975073268(?:[/?#]|$)/i, 'apfel-squishy.webp'],
+] as const
+
+export function getProductImage(shopUrl: string, list: 'janus' | 'marlene') {
+  const images = list === 'marlene' ? marleneImages : shopImages
+  const file = images.find(([key]) => key.test(shopUrl))?.[1]
+  if (file && list === 'marlene') return `${import.meta.env.BASE_URL}products/marlene/${file}`
   return file ? `${import.meta.env.BASE_URL}products/${file}` : undefined
 }

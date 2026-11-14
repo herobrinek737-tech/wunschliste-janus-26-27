@@ -18,3 +18,16 @@ Die 14 komprimierten Produktbilder unter `public/products/` wurden aus den jewei
 14. [WMF Kult X Mix & Go](https://www.amazon.de/dp/B0FSL2832J)
 
 The product images are used as visual references; their trademarks and image rights belong to their respective owners.
+## Marlenes Wunschliste
+
+| Bild | Quelle |
+| --- | --- |
+| Reitpoloshirt | [Kleinanzeigen, Originalanzeige](https://www.kleinanzeigen.de/s-anzeige/felix-buehler-reit-polo-shirt-beige-groesse-s/3565144164-154-6306) |
+| Rucksack | [Nike](https://www.nike.com/de/t/rucksack-21-l-5gs9z5) |
+| Trinkflasche | [Müller, Artikel 3050033](https://www.mueller.de/p/air-up-click-bottle-600ml-PPN3050033/) |
+| Rollregal | [Vertbaudet, Artikel 341009955](https://www.vertbaudet.at/kinderzimmer-schubladenelement-4-schubladen-wei.htm?FiltreCouleur=0402&ProductId=341009955) |
+| Kosmetik-Organizer | [OdKarla, Auxmir BOX-6](https://www.odkarla.cz/plastovy-organizer-auxmir-box-6) |
+| Schubladen-Organizer | [Price History, ASIN B0FD34T1NB](https://pricehistory.app/p/lugei-military-grade-drawer-organizer-clear-makeup-NxxPPkG5) |
+| Wäschekorb | [Lifewit, 105 l in Beige](https://www.lifewit.com/products/lifewit-105l-large-laundry-basket) |
+| Nageltips | [OdKarla, ASIN B0DRYWT1WM](https://www.odkarla.cz/modelones-nail-tips-510-kusu-sada-gelovych-tipu-na-nehty-s-plnym-krytim-sada-gelovych-tipu~p1766216) |
+| Squishies | [Walmart, Angebot 19975073268](https://www.walmart.com/ip/19975073268) |

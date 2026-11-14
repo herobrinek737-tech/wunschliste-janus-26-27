@@ -141,9 +141,23 @@ function getPayPalCheckoutHref(baseUrl: string, amountCents: number) {
   }
 }
 
-function ProductArtwork({ item, index }: { item: PublicWishItem; index: number }) {
+function getWishlistShopUrl(item: PublicWishItem, list: WishListSlug) {
+  if (!isPublicShopUrl(item.url)) return ''
+
+  const url = new URL(item.url)
+  if (url.hostname === 'www.google.com' && url.pathname === '/aclk') return ''
+
+  if (list === 'marlene' && (
+    (item.id === 'b938c387-e0ed-46ff-9420-a7d426f2b1be' && /\/dp\/B0DG4Y9R97\/?$/i.test(url.pathname)) ||
+    (item.id === '093fc1cc-1d61-4fe9-b329-077ea3934698' && /\/dp\/B0DRYWT1WM\/?$/i.test(url.pathname))
+  )) return ''
+
+  return item.url
+}
+
+function ProductArtwork({ item, index, list, shopUrl }: { item: PublicWishItem; index: number; list: WishListSlug; shopUrl: string }) {
   const [failedImages, setFailedImages] = useState<string[]>([])
-  const image = [item.image_url, getProductImage(item.url)].find((src) => src && !failedImages.includes(src))
+  const image = [item.image_url, getProductImage(shopUrl, list)].find((src) => src && !failedImages.includes(src))
 
   return (
     <div className={'product-art product-art-' + accents[index % accents.length]}>
@@ -507,7 +521,7 @@ function App() {
         <div className="intro-copy">
           <p className="eyebrow">Wunschliste {listSlug === 'marlene' ? 'von Marlene' : 'von Janus'} · Weihnachten 2026</p>
           <h1>{listSlug === 'marlene' ? <>Ein paar Dinge,<br /><em>die Marlene Freude machen.</em></> : <>Ein paar Dinge,<br /><em>die Freude machen.</em></>}</h1>
-          <p className="intro-text">Hier findest du {listSlug === 'marlene' ? 'Marlenes' : 'meine'} Wünsche für dieses Jahr. Wenn du etwas davon schenken möchtest, reserviere es oder beteilige dich an einem Teilbetrag.</p>
+          <p className="intro-text">Hier findest du {listSlug === 'marlene' ? 'Marlenes' : 'meine'} Wünsche für dieses Jahr. Du kannst ein Geschenk reservieren oder einen Teil des Preises übernehmen.</p>
           {!loading && !error && <div className="wish-count"><span className="count-star" aria-hidden="true">✳</span><span><strong>{items.length}</strong> {items.length === 1 ? 'Wunsch' : 'Wünsche'} auf der Liste</span></div>}
         </div>
         <div className="intro-art" aria-hidden="true">
@@ -536,35 +550,38 @@ function App() {
         ) : (
           <div className="wish-grid">
             {items.length === 0 && <p className="empty-public-list">Diese Wunschliste ist noch leer. Wünsche erscheinen hier, sobald sie ergänzt wurden.</p>}
-            {items.map((item, index) => (
-              <article className={'wish-card ' + (item.is_featured ? 'wish-card-featured ' : '') + (item.is_reserved ? 'is-reserved' : '')} key={item.id}>
-                <ProductArtwork item={item} index={index} />
-                <div className="wish-card-content">
-                  <h3>{item.title}</h3>
-                  <div className="card-meta">
-                    <span className="price">{item.price_cents > 0 ? `Zielbetrag ca. ${price(item.price_cents)}` : 'Preis offen'}</span>
-                    {isPublicShopUrl(item.url) && <a href={item.url} target="_blank" rel="noreferrer" aria-label={`Zum Shop für ${item.title} (neuer Tab)`}>Zum Shop <span aria-hidden="true">↗</span></a>}
-                  </div>
-                  {item.contributed_cents > 0 && !item.is_reserved && item.remaining_cents > 0 && (
-                    <p className="contribution-progress">Noch {price(item.remaining_cents)} offen · {price(item.contributed_cents)} zugesagt</p>
-                  )}
-                  {item.is_reserved ? (
-                    <p className="gift-button gift-button-done">Reserviert</p>
-                  ) : item.price_cents > 0 && item.remaining_cents === 0 ? (
-                    <p className="gift-button gift-button-done">Zielbetrag zugesagt</p>
-                  ) : (
-                    <div className="gift-actions">
-                      <button className="gift-button" onClick={() => addToCart(item, listSlug)} disabled={!isSupabaseConfigured}>
-                        {cartByList[listSlug][item.id] ? 'Warenkorb öffnen' : 'In den Warenkorb'} <span aria-hidden="true">＋</span>
-                      </button>
-                      {item.remaining_cents > 0 && <button className="gift-button gift-button-secondary" onClick={() => openWishForm(item, listSlug, 'contribute')} disabled={!isSupabaseConfigured}>
-                        Mit einem Teilbetrag beteiligen <span aria-hidden="true">＋</span>
-                      </button>}
+            {items.map((item, index) => {
+              const shopUrl = getWishlistShopUrl(item, listSlug)
+              return (
+                <article className={'wish-card ' + (item.is_featured ? 'wish-card-featured ' : '') + (item.is_reserved ? 'is-reserved' : '')} key={item.id}>
+                  <ProductArtwork item={item} index={index} list={listSlug} shopUrl={shopUrl} />
+                  <div className="wish-card-content">
+                    <h3>{item.title}</h3>
+                    <div className="card-meta">
+                      <span className="price">{item.price_cents > 0 ? `Zielbetrag ca. ${price(item.price_cents)}` : 'Preis offen'}</span>
+                      {shopUrl && <a href={shopUrl} target="_blank" rel="noreferrer" aria-label={`Angebot für ${item.title} ansehen (neuer Tab)`}>Zum Angebot <span aria-hidden="true">↗</span></a>}
                     </div>
-                  )}
-                </div>
-              </article>
-            ))}
+                    {item.contributed_cents > 0 && !item.is_reserved && item.remaining_cents > 0 && (
+                      <p className="contribution-progress">Noch {price(item.remaining_cents)} offen · {price(item.contributed_cents)} zugesagt</p>
+                    )}
+                    {item.is_reserved ? (
+                      <p className="gift-button gift-button-done">Reserviert</p>
+                    ) : item.price_cents > 0 && item.remaining_cents === 0 ? (
+                      <p className="gift-button gift-button-done">Zielbetrag zugesagt</p>
+                    ) : (
+                      <div className="gift-actions">
+                        <button className="gift-button" onClick={() => addToCart(item, listSlug)} disabled={!isSupabaseConfigured}>
+                          {cartByList[listSlug][item.id] ? 'Warenkorb öffnen' : 'In den Warenkorb'} <span aria-hidden="true">＋</span>
+                        </button>
+                        {item.remaining_cents > 0 && <button className="gift-button gift-button-secondary" onClick={() => openWishForm(item, listSlug, 'contribute')} disabled={!isSupabaseConfigured}>
+                          Mit einem Teilbetrag beteiligen <span aria-hidden="true">＋</span>
+                        </button>}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              )
+            })}
           </div>
         )}
       </section>
