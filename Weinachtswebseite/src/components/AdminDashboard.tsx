@@ -19,6 +19,7 @@ import { isSupabaseConfigured, requireSupabase } from '../lib/supabase'
 import { errorMessage, euroToCents, isPublicShopUrl } from '../lib/input'
 import type { AdminCapabilities, AdminContribution, AdminWishItem, GiftActivity, WishListSlug } from '../lib/types'
 import Modal from './Modal'
+import WishlistSettings from './WishlistSettings'
 
 function money(cents: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
@@ -95,6 +96,7 @@ function ItemEditor({
   onNotice: (notice: string) => void
 }) {
   const [title, setTitle] = useState(item?.title ?? '')
+  const [note, setNote] = useState(item?.note ?? '')
   const [url, setUrl] = useState(item?.url ?? '')
   const [priceInput, setPriceInput] = useState(item?.price_cents ? (item.price_cents / 100).toFixed(2).replace('.', ',') : '')
   const [isFeatured, setIsFeatured] = useState(item?.is_featured ?? false)
@@ -144,6 +146,7 @@ function ItemEditor({
         id: item?.id ?? null,
         list_slug: listSlug,
         title: title.trim(),
+        note: note.trim(),
         url: url.trim(),
         price_cents: priceCents,
         is_featured: isFeatured,
@@ -169,6 +172,9 @@ function ItemEditor({
       <form onSubmit={submit}>
         <label htmlFor="item-title">Produkttitel</label>
         <input id="item-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required />
+        <label htmlFor="item-note">Öffentliche Produktnotiz</label>
+        <textarea id="item-note" value={note} onChange={(event) => setNote(event.target.value)}
+          maxLength={600} rows={3} placeholder="Zum Beispiel Größe, Farbe oder Variante" />
         <label htmlFor="item-url">Shop-Link</label>
         <input id="item-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} required />
         <label htmlFor="item-price">Geschätzter Preis in Euro <span>(optional)</span></label>
@@ -582,6 +588,11 @@ function AdminDashboard() {
                     </button>
                   ))}
                 </div>
+                <WishlistSettings key={listSlug} list={listSlug} itemCount={items.length} email={signedInEmail}
+                  onDeleted={(count) => {
+                    setMessage(count === 1 ? '1 Produkt wurde gelöscht.' : `${count} Produkte wurden gelöscht.`)
+                    void refresh()
+                  }} />
                 <p className="drag-hint">Ziehe die Artikel am Griff oder nutze die Pfeile, um die Reihenfolge zu ändern.</p>
                 <div className="admin-table-wrap">
                   <table className="admin-table">

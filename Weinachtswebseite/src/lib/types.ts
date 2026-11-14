@@ -3,6 +3,7 @@ export type WishListSlug = 'janus' | 'marlene'
 export type PublicWishItem = {
   id: string
   title: string
+  note?: string | null
   url: string
   price_cents: number
   sort_order: number
@@ -16,6 +17,7 @@ export type PublicWishItem = {
 export type AdminWishItem = {
   id: string
   title: string
+  note?: string | null
   url: string
   price_cents: number
   sort_order: number

@@ -16,3 +16,6 @@ enable_signup = false
 [auth.email]
 enable_signup = false
 enable_confirmations = true
+
+[functions.wish-bulk-delete]
+verify_jwt = false

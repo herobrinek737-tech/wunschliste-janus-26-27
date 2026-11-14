@@ -2,7 +2,10 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { FormEvent } from 'react'
 import Modal from './components/Modal'
-import { contributeItem, getPublicItems, reserveItem } from './lib/api'
+import WishlistPrint from './components/WishlistPrint'
+import { contributeItem, getListSeason, getPublicItems, reserveItem } from './lib/api'
+import { listNames, seasons, wishlistTitle } from './lib/seasons'
+import type { Season } from './lib/seasons'
 import { demoWishItems } from './lib/demo-items'
 import { getProductImage, getWishIllustration } from './lib/product-images'
 import { isSupabaseConfigured } from './lib/supabase'
@@ -180,6 +183,10 @@ function ProductArtwork({ item, index, list, shopUrl }: { item: PublicWishItem; 
 function App() {
   const [isAdminRoute, setIsAdminRoute] = useState(isAdminLocation)
   const [listSlug, setListSlug] = useState<WishListSlug>(getListSlug)
+  const [seasonByList, setSeasonByList] = useState<Record<WishListSlug, Season>>({ janus: 'winter', marlene: 'winter' })
+  const season = seasonByList[listSlug]
+  const theme = seasons[season]
+  const title = wishlistTitle(season, listSlug)
   const [itemsByList, setItemsByList] = useState<Record<WishListSlug, PublicWishItem[]>>(() => ({ janus: isSupabaseConfigured ? [] : demoWishItems, marlene: [] }))
   const items = itemsByList[listSlug].filter((item) => isPublicShopUrl(item.url))
   const [cartByList, setCartByList] = useState<CartByList>(readCartByList)
@@ -238,9 +245,10 @@ function App() {
     setLoading(true)
     setError('')
     try {
-      const refreshedItems = await getPublicItems(listSlug)
+      const [refreshedItems, refreshedSeason] = await Promise.all([getPublicItems(listSlug), getListSeason(listSlug)])
       if (request !== listRequest.current) return
       setItemsByList((current) => ({ ...current, [listSlug]: refreshedItems }))
+      setSeasonByList((current) => ({ ...current, [listSlug]: refreshedSeason }))
     } catch {
       if (request === listRequest.current) setError('Die Wunschliste konnte nicht geladen werden.')
     } finally {
@@ -271,6 +279,10 @@ function App() {
   useEffect(() => {
     if (!isAdminRoute) void refreshItems()
   }, [listSlug, isAdminRoute])
+
+  useEffect(() => {
+    document.title = isAdminRoute ? 'Admin · Wunschlisten' : title
+  }, [isAdminRoute, title])
 
   useEffect(() => {
     if (isAdminRoute || !isSupabaseConfigured) return
@@ -481,8 +493,9 @@ function App() {
   )
 
   return (
-    <main className={`site-shell ${snow ? '' : 'snow-off'}`}>
-      <div className="winter-scenery" aria-hidden="true">
+    <main className={`site-shell public-wishlist season-${season} ${snow ? '' : 'snow-off'}`}
+      style={{ '--season-ink': theme.ink, '--season-accent': theme.accent, '--season-paper': theme.paper } as CSSProperties}>
+      {season === 'winter' && <div className="winter-scenery" aria-hidden="true">
         <div className="winter-forest winter-forest-left">
           {forestTrees.slice(0, 4).map((tree, index) => (
             <span key={index} className={`forest-tree ${tree.shade}`} style={{ left: `${tree.left}%`, width: tree.width, height: tree.height } as CSSProperties} />
@@ -493,8 +506,8 @@ function App() {
             <span key={index} className={`forest-tree ${tree.shade}`} style={{ left: `${tree.left - 79}%`, width: tree.width, height: tree.height } as CSSProperties} />
           ))}
         </div>
-      </div>
-      {snow && <div className="snowfall" aria-hidden="true">
+      </div>}
+      {season === 'winter' && snow && <div className="snowfall" aria-hidden="true">
         {snowflakes.map((flake, index) => (
           <span
             key={index}
@@ -506,7 +519,7 @@ function App() {
       <header className="topbar">
         <a className="brand" href={getListHref(listSlug)} aria-label="Zur Wunschliste">
           <span className="brand-mark">{listSlug === 'marlene' ? 'M' : 'J'}</span>
-          <span>{listSlug === 'marlene' ? 'MARLENE' : 'JANUS'} <i>·</i> 26/27</span>
+          <span>{listNames[listSlug].toUpperCase()} <i>·</i> {theme.label}</span>
         </a>
         <nav className="topbar-actions" aria-label="Wunschlisten">
           <button className="admin-area-link cart-toggle" onClick={() => openCart()} aria-label={`Gemeinsamen Warenkorb mit ${cartCount} Artikeln öffnen`}>
@@ -521,12 +534,12 @@ function App() {
 
       <section className="intro">
         <div className="intro-copy">
-          <p className="eyebrow">Wunschliste {listSlug === 'marlene' ? 'von Marlene' : 'von Janus'} · Weihnachten 2026</p>
-          <h1>{listSlug === 'marlene' ? <>Ein paar Dinge,<br /><em>die Marlene Freude machen.</em></> : <>Ein paar Dinge,<br /><em>die Freude machen.</em></>}</h1>
+          <p className="eyebrow">{theme.label}</p>
+          <h1>{theme.title}<br /><em>von {listNames[listSlug]}</em></h1>
           <p className="intro-text">Hier findest du {listSlug === 'marlene' ? 'Marlenes' : 'meine'} Wünsche für dieses Jahr. Du kannst ein Geschenk reservieren oder einen Teil des Preises übernehmen.</p>
           {!loading && !error && <div className="wish-count"><span className="count-star" aria-hidden="true">✳</span><span><strong>{items.length}</strong> {items.length === 1 ? 'Wunsch' : 'Wünsche'} auf der Liste</span></div>}
         </div>
-        <div className="intro-art" aria-hidden="true">
+        {season === 'winter' ? <div className="intro-art" aria-hidden="true">
           <div className="moon" />
           <div className="tree tree-back"><i /><i /><i /></div>
           <div className="tree tree-front"><i /><i /><i /></div>
@@ -535,7 +548,7 @@ function App() {
           <span className="art-spark spark-one">✳</span>
           <span className="art-spark spark-two">✦</span>
           <span className="art-label">WISHES<br />& WONDER</span>
-        </div>
+        </div> : <div className="season-art" aria-hidden="true">{theme.symbol}</div>}
       </section>
 
       {!isSupabaseConfigured && <div className="setup-banner">Vorschau mit Platzhalterpreisen · Verbinde Supabase, um Reservierungen zu aktivieren.</div>}
@@ -544,6 +557,7 @@ function App() {
       <section className="wishlist-section" aria-labelledby="wishlist-title">
         <div className="section-heading">
           <div><p className="eyebrow">Für dich ausgesucht</p><h2 id="wishlist-title">{listSlug === 'marlene' ? 'Marlene wünscht sich' : 'Die Wunschliste'}</h2></div>
+          {!loading && !error && <button className="outline-button" type="button" onClick={() => window.print()}>Als PDF speichern</button>}
         </div>
         {loading ? (
           <div className="loading-state" role="status"><span className="loader" aria-hidden="true" /> Wunschliste wird geladen …</div>
@@ -559,6 +573,7 @@ function App() {
                   <ProductArtwork item={item} index={index} list={listSlug} shopUrl={shopUrl} />
                   <div className="wish-card-content">
                     <h3>{item.title}</h3>
+                    {item.note && <p className="product-note">{item.note}</p>}
                     <div className="card-meta">
                       <span className="price">{item.price_cents > 0 ? `Zielbetrag ca. ${price(item.price_cents)}` : 'Preis offen'}</span>
                       {shopUrl && <a href={shopUrl} target="_blank" rel="noreferrer" aria-label={`Angebot für ${item.title} ansehen (neuer Tab)`}>Zum Angebot <span aria-hidden="true">↗</span></a>}
@@ -587,10 +602,11 @@ function App() {
           </div>
         )}
       </section>
+      {!loading && !error && <WishlistPrint items={items} season={season} list={listSlug} shopUrl={getWishlistShopUrl} />}
 
       <footer className="site-footer">
         <span>Mit Liebe zusammengestellt von {listSlug === 'marlene' ? 'Marlene' : 'Janus'}</span>
-        <button className="quiet-button" type="button" onClick={toggleSnow} aria-pressed={snow}>Schneefall</button>
+        {season === 'winter' && <button className="quiet-button" type="button" onClick={toggleSnow} aria-pressed={snow}>Schneefall</button>}
       </footer>
 
       {selected && (
