@@ -1,9 +1,11 @@
 import { requireSupabase } from './supabase'
+import { FunctionsHttpError } from '@supabase/supabase-js'
+import type { Season } from './seasons'
 import type { AdminCapabilities, AdminContribution, AdminWishItem, GiftActivity, PublicWishItem, WishListSlug } from './types'
 
 export async function getPublicItems(listSlug: WishListSlug) {
   const client = requireSupabase()
-  const { data, error } = await client.rpc('get_public_wish_items', { p_list_slug: listSlug })
+  const { data, error } = await client.rpc('get_public_wish_items_with_notes', { p_list_slug: listSlug })
   if (error) throw error
   return (data ?? []) as PublicWishItem[]
 }
@@ -50,7 +52,7 @@ export async function getAdminCapabilities() {
 
 export async function getAdminItems(listSlug: WishListSlug) {
   const client = requireSupabase()
-  const { data, error } = await client.rpc('admin_list_wish_items', { p_list_slug: listSlug })
+  const { data, error } = await client.rpc('admin_list_wish_items_with_notes', { p_list_slug: listSlug })
   if (error) throw error
   return (data ?? []) as AdminWishItem[]
 }
@@ -84,9 +86,10 @@ export async function saveItem(item: {
   is_featured: boolean
   image_url: string | null
   list_slug: WishListSlug
+  note: string
 }) {
   const client = requireSupabase()
-  const { data, error } = await client.rpc('admin_save_wish_item', {
+  const { data, error } = await client.rpc('admin_save_wish_item_with_note', {
     p_item_id: item.id,
     p_list_slug: item.list_slug,
     p_title: item.title,
@@ -94,9 +97,35 @@ export async function saveItem(item: {
     p_price_cents: item.price_cents,
     p_is_featured: item.is_featured,
     p_image_url: item.image_url,
+    p_note: item.note,
   })
   if (error) throw error
   return data as string
+}
+
+export async function getListSeason(listSlug: WishListSlug) {
+  const { data, error } = await requireSupabase().from('wish_list_settings')
+    .select('season').eq('list_slug', listSlug).single()
+  if (error) throw error
+  return data.season as Season
+}
+
+export async function saveListSeason(listSlug: WishListSlug, season: Season) {
+  const { error } = await requireSupabase().from('wish_list_settings')
+    .update({ season }).eq('list_slug', listSlug).select('season').single()
+  if (error) throw error
+}
+
+export async function bulkDelete(listSlug: WishListSlug, code?: string) {
+  const { data, error } = await requireSupabase().functions.invoke<{ count?: number }>('wish-bulk-delete', {
+    body: { listSlug, action: code === undefined ? 'send' : 'confirm', code },
+  })
+  if (error instanceof FunctionsHttpError) {
+    const response = await error.context.json().catch(() => null)
+    throw new Error(response?.message ?? 'Die Löschfunktion ist derzeit nicht verfügbar.')
+  }
+  if (error) throw error
+  return data?.count
 }
 
 export async function deleteItem(itemId: string, listSlug: WishListSlug) {

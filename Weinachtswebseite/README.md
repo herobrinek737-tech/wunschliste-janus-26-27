@@ -76,6 +76,19 @@ Spiele die Migrationen in `supabase/migrations/` vor der Veröffentlichung ein. 
 - Janus' und Marlenes Wünsche landen im selben lokalen Warenkorb. Einzelne Wünsche können reserviert und Teilbeträge zugesagt werden. Mehrere Zusagen für denselben Wunsch werden im Warenkorb addiert. Die Datenbank prüft bei jeder Zusage den offenen Restbetrag. Wenn die Positionen bestätigt sind, kann der geschätzte Gesamtbetrag per PayPal oder nach Absprache mit Papa bezahlt werden.
 - Produktbilder liegen im öffentlichen Supabase-Storage-Bucket `product-images`. Nur Admin-Konten dürfen dort hochladen oder löschen.
 - Der INZONE H9 II ist als Hauptwunsch markiert.
+- **Als PDF speichern** öffnet den Druckdialog mit einem A4-Layout für die angezeigte Wunschliste. Wähle dort **Als PDF speichern**. Titel, Farbpalette und Symbol folgen der Jahreszeit der jeweiligen Liste.
+- Im Admin-Bereich kannst du die Jahreszeit pro Liste auswählen. Öffentliche Produktnotizen werden im Artikel-Editor gepflegt und erscheinen auf der Seite und im PDF.
+
+## Sammellöschung mit E-Mail-Code
+
+**Alle Produkte löschen** gilt für die aktuell ausgewählte Liste. Die Funktion verlangt eine Anmeldung mit dem Admin-Passwort und einen einmaligen, zehn Minuten gültigen Bestätigungscode an `janus.kleine@cbg-duelmen.de`. Bei Reservierungen oder zugesagten Teilbeträgen bricht sie ab, bis diese geklärt sind.
+
+Für den Versand braucht die Supabase Edge Function `wish-bulk-delete` zwei serverseitige Secrets unter **Edge Functions → Secrets**.
+
+- `RESEND_API_KEY` enthält den Resend-API-Schlüssel für den Mailversand.
+- `WISH_BULK_DELETE_FROM` enthält den Absender einer in Resend verifizierten Domain, zum Beispiel `Wunschlisten <wunschliste@deine-domain.de>`.
+
+Für andere Supabase-Projekte spiele zuerst die Migration ein und deploye dann `supabase functions deploy wish-bulk-delete --project-ref <Projekt-Ref>`. Die Funktion prüft die Anmeldung und Listenberechtigung serverseitig. Lege die Secrets ausschließlich in Supabase ab.
 
 ## Projektstruktur
 
