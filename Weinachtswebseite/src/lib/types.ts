@@ -48,4 +48,5 @@ export type AdminContribution = {
 export type AdminCapabilities = {
   can_edit: boolean
   can_view_givers: boolean
+  editableLists: WishListSlug[]
 }

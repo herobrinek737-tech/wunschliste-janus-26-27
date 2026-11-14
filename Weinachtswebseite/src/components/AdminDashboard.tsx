@@ -267,6 +267,12 @@ function AdminDashboard() {
     try {
       const roles = await getAdminCapabilities()
       setCapabilities(roles)
+      if (roles.can_edit && !roles.editableLists.includes(listSlug)) {
+        setItems([])
+        setContributions([])
+        if (roles.editableLists[0]) selectList(roles.editableLists[0])
+        return
+      }
       if (!roles.can_edit && !roles.can_view_givers) {
         setItems([])
         setActivity([])
@@ -570,8 +576,11 @@ function AdminDashboard() {
             <>
               {canEdit && <>
                 <div className="admin-list-tabs" role="group" aria-label="Wunschliste wählen">
-                  <button className="outline-button" disabled={savingOrder} aria-pressed={listSlug === 'janus'} onClick={() => selectList('janus')}>Janus</button>
-                  <button className="outline-button" disabled={savingOrder} aria-pressed={listSlug === 'marlene'} onClick={() => selectList('marlene')}>Marlene</button>
+                  {capabilities?.editableLists.map((slug) => (
+                    <button key={slug} className="outline-button" disabled={savingOrder} aria-pressed={listSlug === slug} onClick={() => selectList(slug)}>
+                      {slug === 'janus' ? 'Janus' : 'Marlene'}
+                    </button>
+                  ))}
                 </div>
                 <p className="drag-hint">Ziehe die Artikel am Griff oder nutze die Pfeile, um die Reihenfolge zu ändern.</p>
                 <div className="admin-table-wrap">

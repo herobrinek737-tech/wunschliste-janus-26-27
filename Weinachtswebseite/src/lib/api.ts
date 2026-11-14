@@ -35,7 +35,17 @@ export async function getAdminCapabilities() {
   const client = requireSupabase()
   const { data, error } = await client.rpc('get_admin_capabilities')
   if (error) throw error
-  return ((data ?? [])[0] ?? { can_edit: false, can_view_givers: false }) as AdminCapabilities
+  const roles = ((data ?? [])[0] ?? { can_edit: false, can_view_givers: false }) as Omit<AdminCapabilities, 'editableLists'>
+  const editableLists: WishListSlug[] = []
+  if (roles.can_edit) {
+    const lists = ['janus', 'marlene'] as const
+    const permissions = await Promise.all(lists.map((slug) => client.rpc('can_manage_wish_list', { p_list_slug: slug })))
+    permissions.forEach((permission, index) => {
+      if (permission.error) throw permission.error
+      if (permission.data === true) editableLists.push(lists[index])
+    })
+  }
+  return { ...roles, editableLists }
 }
 
 export async function getAdminItems(listSlug: WishListSlug) {
