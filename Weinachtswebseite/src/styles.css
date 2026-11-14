@@ -391,6 +391,18 @@ body::after {
 .wish-card-featured .product-image { inset: 19px; width: calc(100% - 38px); height: calc(100% - 38px); }
 .product-symbol { border-color: #a6c4d8; color: #4f7d9c; text-shadow: none; box-shadow: 0 0 0 14px #ffffffa8, 0 12px 26px #25445c1c; }
 .product-index { z-index: 2; color: #537894; }
+.product-illustration-label {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 2;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f7fbff;
+  color: #355a73;
+  font-size: .75rem;
+  font-weight: 600;
+}
 .main-wish { z-index: 2; border-color: #a5c7de; border-radius: 999px; background: #f7fbffeb; color: #416d8c; }
 .reserved-overlay { z-index: 3; background: #183c56c9; }
 .wish-card-content { background: #fff; }

@@ -4,7 +4,7 @@ import type { FormEvent } from 'react'
 import Modal from './components/Modal'
 import { contributeItem, getPublicItems, reserveItem } from './lib/api'
 import { demoWishItems } from './lib/demo-items'
-import { getProductImage } from './lib/product-images'
+import { getProductImage, getWishIllustration } from './lib/product-images'
 import { isSupabaseConfigured } from './lib/supabase'
 import { errorMessage, euroToCents, isPublicShopUrl } from './lib/input'
 import type { PublicWishItem, WishListSlug } from './lib/types'
@@ -157,7 +157,8 @@ function getWishlistShopUrl(item: PublicWishItem, list: WishListSlug) {
 
 function ProductArtwork({ item, index, list, shopUrl }: { item: PublicWishItem; index: number; list: WishListSlug; shopUrl: string }) {
   const [failedImages, setFailedImages] = useState<string[]>([])
-  const image = [item.image_url, getProductImage(shopUrl, list)].find((src) => src && !failedImages.includes(src))
+  const illustration = list === 'marlene' ? getWishIllustration(item.id) : undefined
+  const image = [item.image_url, getProductImage(shopUrl, list), illustration].find((src) => src && !failedImages.includes(src))
 
   return (
     <div className={'product-art product-art-' + accents[index % accents.length]}>
@@ -168,6 +169,7 @@ function ProductArtwork({ item, index, list, shopUrl }: { item: PublicWishItem; 
         <span className="product-symbol" aria-hidden="true">{symbols[index % symbols.length]}</span>
       )}
       <span className="product-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+      {image && image === illustration && <span className="product-illustration-label">Beispielbild</span>}
       {item.is_featured && <span className="main-wish">HAUPTWUNSCH</span>}
       {item.is_reserved && <span className="reserved-overlay" aria-hidden="true"><span>✓</span> Reserviert</span>}
       {!item.is_reserved && item.price_cents > 0 && item.remaining_cents === 0 && <span className="reserved-overlay" aria-hidden="true"><span>✓</span> Zielbetrag zugesagt</span>}

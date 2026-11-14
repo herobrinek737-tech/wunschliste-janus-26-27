@@ -35,3 +35,16 @@ export function getProductImage(shopUrl: string, list: 'janus' | 'marlene') {
   if (file && list === 'marlene') return `${import.meta.env.BASE_URL}products/marlene/${file}`
   return file ? `${import.meta.env.BASE_URL}products/${file}` : undefined
 }
+
+const wishIllustrations: Readonly<Record<string, string>> = {
+  '81a39b15-2c2e-4513-b4a9-82f6b30edd25': 'beige-handtasche',
+  'b938c387-e0ed-46ff-9420-a7d426f2b1be': 'dekobilder',
+  '093fc1cc-1d61-4fe9-b329-077ea3934698': 'nagelwerkzeug',
+  'a7ea06f3-a0db-4498-a9f4-c3a181ab5b08': 'kontokarte',
+  '0dd7c0bf-6fea-45c9-9638-f2d5072fa20f': 'nagelsticker',
+}
+
+export function getWishIllustration(itemId: string) {
+  const file = wishIllustrations[itemId]
+  return file ? `${import.meta.env.BASE_URL}products/marlene/${file}-beispiel.webp` : undefined
+}
